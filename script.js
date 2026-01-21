@@ -11,8 +11,8 @@ setInterval(() => {
 window.lockScreen = () => { document.getElementById('blackout').style.display = 'flex'; };
 window.unlockScreen = () => { document.getElementById('blackout').style.display = 'none'; };
 
-// 2. ANDMEBAAS (V14)
-const dbReq = indexedDB.open("Peegel_Data_V14", 1);
+// 2. ANDMEBAAS (V14.1)
+const dbReq = indexedDB.open("Peegel_Data_V14_1", 1);
 dbReq.onupgradeneeded = e => e.target.result.createObjectStore("log", { keyPath: "id" });
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
@@ -104,7 +104,7 @@ async function startApp() {
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
         isLive = true;
         autoFixInterval = setInterval(() => { handleFix(); }, 600000);
-    } catch (err) { alert("Viga: " + err); }
+    } catch (err) { alert("Viga mikrofoni käivitamisel."); }
 }
 
 function handleStart() {
@@ -129,6 +129,8 @@ function saveSegment(callback) {
         const endTime = new Date().toLocaleTimeString('et-EE');
         mediaRecorder.stop();
         let finalHz = pitchHistory.length > 0 ? Math.round(pitchHistory.reduce((a,b) => a+b) / pitchHistory.length) : 0;
+        
+        // Ootame 500ms, et chunks täituks
         setTimeout(() => {
             const txt = document.getElementById('live-transcript').innerText.trim();
             const blob = new Blob(chunks, { type: 'audio/webm' });
@@ -137,16 +139,30 @@ function saveSegment(callback) {
             reader.onloadend = () => {
                 const tx = db.transaction("log", "readwrite");
                 tx.objectStore("log").add({ id: Date.now(), start: sessionStartTime, end: endTime, text: txt, audio: reader.result, avgHz: finalHz });
-                tx.oncomplete = () => { renderHistory(); if (callback) callback(); };
+                tx.oncomplete = () => { 
+                    console.log("Salvestatud mällu.");
+                    if (callback) callback(); 
+                };
             };
         }, 500);
     } else if (callback) callback();
 }
 
+// --- PARANDATUD HANDLESTOP ---
 function handleStop() {
-    if (confirm("Lõpeta sessioon?")) { 
-        isLive = false; if (wakeLock) wakeLock.release(); clearInterval(autoFixInterval); 
-        saveSegment(() => { setTimeout(() => { location.reload(); }, 500); }); 
+    if (confirm("Lõpeta sessioon ja salvesta mällu?")) { 
+        isLive = false; 
+        if (wakeLock) { wakeLock.release(); wakeLock = null; }
+        clearInterval(autoFixInterval); 
+        
+        document.getElementById('live-transcript').innerText = "Salvestan viimast osa, oota...";
+
+        saveSegment(() => { 
+            // Ootame 1 sekundi, et IndexedDB jõuaks operatsiooni lõpetada
+            setTimeout(() => { 
+                location.reload(); 
+            }, 1000); 
+        }); 
     }
 }
 
@@ -160,23 +176,23 @@ function renderHistory() {
     tx.objectStore("log").getAll().onsuccess = e => {
         const items = e.target.result.sort((a,b) => b.id - a.id);
         document.getElementById('history-list').innerHTML = items.map(s => `
-            <div class="glass p-5 rounded-3xl space-y-4 border border-slate-800">
+            <div class="glass p-5 rounded-3xl space-y-4 border border-slate-800 shadow-lg">
                 <div class="flex justify-between items-center text-[10px] font-bold text-slate-500">
                     <span>${s.start} — ${s.end}</span>
                     <button onclick="del(${s.id})" class="text-red-900/50 hover:text-red-500">🗑️</button>
                 </div>
-                <div class="text-blue-400 font-bold text-xs">${s.avgHz} Hz</div>
+                <div class="text-blue-400 font-bold text-xs">Keskmine: ${s.avgHz} Hz</div>
                 <div class="flex gap-2">
-                    <button onclick="fullDownload(${s.id})" class="flex-1 bg-blue-600/20 text-blue-400 py-2 rounded-xl text-[10px] font-bold uppercase">Download</button>
-                    <button onclick="showText(${s.id}, this)" class="flex-1 bg-slate-800/50 text-slate-400 py-2 rounded-xl text-[10px] font-bold uppercase">Text</button>
+                    <button onclick="fullDownload(${s.id})" class="flex-1 bg-blue-600/20 text-blue-400 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest border border-blue-500/20">Download</button>
+                    <button onclick="showText(${s.id}, this)" class="flex-1 bg-slate-800/50 text-slate-400 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest border border-white/5">Text</button>
                 </div>
-                <div id="cont-${s.id}" class="hidden bg-black/60 p-4 rounded-xl text-sm italic text-slate-400 border-l-2 border-blue-600"></div>
-                <audio controls src="${s.audio}" class="w-full h-8 opacity-80"></audio>
+                <div id="cont-${s.id}" class="hidden bg-black/60 p-4 rounded-xl text-sm italic text-slate-400 border-l-2 border-blue-600 leading-relaxed font-serif"></div>
+                <audio controls src="${s.audio}" class="w-full h-8 opacity-80 contrast-125"></audio>
             </div>`).join('');
     };
 }
 
-window.del = id => { if(confirm("Kustuta?")) { const tx = db.transaction("log", "readwrite"); tx.objectStore("log").delete(id); tx.oncomplete = () => renderHistory(); } };
+window.del = id => { if(confirm("Kustuta see klipp?")) { const tx = db.transaction("log", "readwrite"); tx.objectStore("log").delete(id); tx.oncomplete = () => renderHistory(); } };
 window.showText = (id, btn) => {
     const el = document.getElementById(`cont-${id}`);
     if (el.classList.contains('hidden')) {
@@ -188,7 +204,12 @@ window.fullDownload = (id) => {
     const tx = db.transaction("log", "readonly");
     tx.objectStore("log").get(id).onsuccess = e => {
         const d = e.target.result;
-        const html = `<html><body style="background:#020617;color:white;font-family:sans-serif;padding:40px;"><h2>${d.start} - ${d.end} (${d.avgHz} Hz)</h2><audio controls src="${d.audio}" style="width:100%"></audio><div style="margin-top:30px;font-style:italic;color:#cbd5e1;line-height:1.6;font-size:1.2rem;border-left:4px solid #3b82f6;padding-left:20px;">${d.text}</div></body></html>`;
+        const html = `<html><body style="background:#020617;color:white;font-family:sans-serif;padding:40px;">
+            <h2 style="color:#60a5fa">${d.start} - ${d.end}</h2>
+            <p style="background:#1e293b; padding:10px; border-radius:8px; display:inline-block;">KESKMINE SAGEDUS: ${d.avgHz} Hz</p>
+            <br><audio controls src="${d.audio}" style="width:100%"></audio>
+            <div style="margin-top:30px;font-style:italic;color:#cbd5e1;line-height:1.6;font-size:1.2rem;border-left:4px solid #3b82f6;padding-left:20px;">${d.text}</div>
+        </body></html>`;
         const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([html], {type: 'text/html'}));
         a.download = `Analüüs_${d.start.replace(/:/g,'-')}.html`; a.click();
     };
