@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="et">
+<head>
+    <link rel="manifest" href="manifest.json">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peegel Uurija v13.8 - Data Focus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #020617; color: #f8fafc; font-family: sans-serif; }
+        .hidden { display: none; }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        .data-badge { background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.3); color: #60a5fa; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: bold; }
+    </style>
+</head>
+<body class="p-5 flex flex-col items-center min-h-screen">
+
+    <div class="w-full max-w-md flex justify-between items-center mb-6">
+        <h1 class="text-xl font-bold text-blue-400 tracking-tight">PEEGEL <span class="text-white font-light text-xs opacity-50">v13.8</span></h1>
+        <div id="clock" class="text-2xl font-mono font-bold text-yellow-500">00:00:00</div>
+    </div>
+
+    <div id="mic-container" class="hidden w-full max-w-md mb-4 bg-slate-900/80 p-4 rounded-3xl border border-blue-900/30 space-y-3 shadow-xl">
+        <div class="flex items-center gap-3">
+            <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+            <div class="flex-1 bg-slate-800 h-3 rounded-full overflow-hidden flex items-center px-1">
+                <div id="mic-bar" class="h-1.5 bg-green-400 rounded-full transition-all duration-75" style="width: 0%"></div>
+            </div>
+            <div class="text-xs font-mono text-blue-400 w-20 text-right font-bold" id="hz-val">0 Hz</div>
+        </div>
+        <div class="flex justify-between items-center">
+            <span id="sound-type" class="text-[10px] uppercase font-black tracking-widest text-slate-500">Ootel...</span>
+            <div class="flex gap-2">
+                <span class="data-badge" id="avg-hz-live">KESK: -- Hz</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="w-full max-w-md glass rounded-3xl p-8 text-center shadow-2xl border border-white/5">
+        <button id="startBtn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-6 px-10 rounded-full text-xl shadow-lg transition-all active:scale-95">
+            ALUSTA ANALÜÜSI
+        </button>
+
+        <div id="activeControls" class="hidden space-y-6">
+            <div class="flex justify-around text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                <div>Kõne: <span id="s-val" class="text-green-400 font-mono text-xs">0s</span></div>
+                <div>Vaikus: <span id="v-val" class="text-slate-300 font-mono text-xs">0s</span></div>
+            </div>
+
+            <div class="text-left bg-slate-900/50 p-4 rounded-2xl border border-slate-700">
+                <div class="flex justify-between mb-2 text-[10px] font-black text-slate-500 uppercase tracking-wider">
+                    <span>Sessiooni puhver (1.5h)</span>
+                    <span id="buffer-text">0 / 90 min</span>
+                </div>
+                <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                    <div id="buffer-bar" class="h-full bg-blue-500 transition-all duration-500" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="live-transcript" class="bg-black/40 p-5 rounded-2xl h-40 overflow-y-auto text-left text-lg italic text-slate-300 border border-slate-800 leading-relaxed scrollbar-hide">
+                ...
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <button id="fixBtn" class="bg-yellow-500 hover:bg-yellow-400 text-black font-black py-4 rounded-2xl uppercase text-xs shadow-md active:scale-95 transition-all">Fikseeri</button>
+                <button id="stopBtn" class="bg-red-600 hover:bg-red-500 text-white font-black py-4 rounded-2xl uppercase text-xs shadow-md active:scale-95 transition-all">Lõpeta</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="w-full max-w-md mt-10">
+        <h3 class="text-slate-500 font-black uppercase text-[10px] tracking-[0.2em] mb-4 ml-2">Uurimuse Ajalugu</h3>
+        <div id="history-list" class="space-y-4 pb-20"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
