@@ -8,7 +8,7 @@ setInterval(() => {
     if(clock) clock.innerText = new Date().toLocaleTimeString('et-EE'); 
 }, 1000);
 
-const dbReq = indexedDB.open("Peegel_V24_DB", 1);
+const dbReq = indexedDB.open("Peegel_V25_DB", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
@@ -24,19 +24,11 @@ document.getElementById('start-btn').onclick = async () => {
         const ctx = new AudioContext();
         const analyser = ctx.createAnalyser();
         const processor = ctx.createScriptProcessor(2048, 1, 1);
-        
-        const source = ctx.createMediaStreamSource(stream);
-        source.connect(analyser);
-        analyser.connect(processor);
+        ctx.createMediaStreamSource(stream).connect(analyser).connect(processor);
         processor.connect(ctx.destination);
 
         mediaRecorder = new MediaRecorder(stream);
-        
-        mediaRecorder.ondataavailable = e => { 
-            if (e.data.size > 0 && isLive) { 
-                chunks.push({ blob: e.data, t: Date.now() }); 
-            } 
-        };
+        mediaRecorder.ondataavailable = e => { if (e.data.size > 0 && isLive) chunks.push({ blob: e.data, t: Date.now() }); };
 
         processor.onaudioprocess = () => {
             if (!isLive) return;
@@ -78,53 +70,38 @@ document.getElementById('start-btn').onclick = async () => {
 
 async function fixSession(callback) {
     if (!mediaRecorder || mediaRecorder.state === "inactive") return;
-    
     const snapNote = document.getElementById('note-input').value;
-    const snapStart = sessionStartTime;
-    const snapEnd = new Date().toLocaleTimeString('et-EE');
+    const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
     const snapStats = { min: hzMin, max: hzMax, s: speechMs, v: silenceMs };
-    const snapChunks = [...chunks];
-    const snapMap = [...speechMap];
+    const snapChunks = [...chunks], snapMap = [...speechMap];
 
     mediaRecorder.onstop = async () => {
+        // RESET kohe
         chunks = []; speechMap = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
         document.getElementById('note-input').value = "";
         if (isLive) mediaRecorder.start(200);
 
-        // FILTREERIMISE PARANDUS: Tagame, et "Puhas" failil on korrektne struktuur
-        // Kasutame laiemat puhvrit (2 sekundit), et vältida liigset hakkimist
+        // OPTIMEERITUD LÕIKAMINE: Kasutame kiiret filtreerimist
         const cleanBlobs = snapChunks.filter(c => {
-            return snapMap.some(m => m.s && Math.abs(m.t - c.t) < 2000);
+            return snapMap.some(m => m.s && Math.abs(m.t - c.t) < 2500); // 2.5s puhver
         }).map(c => c.blob);
 
-        // Kui "Puhas" osa on liiga väike, siis me ei loo seda (vältimaks vigaseid faile)
-        let cleanBase = null;
-        if (cleanBlobs.length > 0) {
-            const cleanBlob = new Blob(cleanBlobs, { type: 'audio/webm' });
-            cleanBase = await toB64(cleanBlob);
-        }
+        const fullB = new Blob(snapChunks.map(c => c.blob), { type: 'audio/webm' });
+        const cleanB = cleanBlobs.length > 0 ? new Blob(cleanBlobs, { type: 'audio/webm' }) : null;
 
-        const fullBlob = new Blob(snapChunks.map(c => c.blob), { type: 'audio/webm' });
-        const fullBase = await toB64(fullBlob);
+        const fullBase = await toB64(fullB);
+        const cleanBase = cleanB ? await toB64(cleanB) : null;
 
         const tx = db.transaction("sessions", "readwrite");
         tx.objectStore("sessions").add({
-            id: Date.now(),
-            start: snapStart,
-            end: snapEnd,
-            hzMin: snapStats.min === Infinity ? 0 : snapStats.min, 
-            hzMax: snapStats.max,
-            note: snapNote,
-            audioFull: fullBase, 
-            audioClean: cleanBase,
-            s: Math.round(snapStats.s/1000), 
-            v: Math.round(snapStats.v/1000)
+            id: Date.now(), start: snapStart, end: snapEnd,
+            hzMin: snapStats.min === Infinity ? 0 : snapStats.min, hzMax: snapStats.max,
+            note: snapNote, audioFull: fullBase, audioClean: cleanBase,
+            s: Math.round(snapStats.s/1000), v: Math.round(snapStats.v/1000)
         });
-
         tx.oncomplete = () => { renderHistory(); if (callback) callback(); };
     };
-    
     mediaRecorder.stop();
 }
 
@@ -137,27 +114,31 @@ function renderHistory() {
         const list = e.target.result.sort((a,b) => b.id - a.id);
         document.getElementById('history-container').innerHTML = list.map(s => `
             <div class="glass rounded-[30px] p-5 space-y-4 shadow-xl border border-white/5">
-                <div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase">
-                    <span>${s.start}-${s.end} | ${s.hzMin}-${s.hzMax}Hz</span>
-                    <button onclick="delS(${s.id})" class="text-red-900 font-bold uppercase opacity-50">Kustuta</button>
+                <div class="flex justify-between text-[10px] font-bold uppercase text-slate-500 leading-tight">
+                    <span>${s.start}-${s.end} | <span class="hz-accent">${s.hzMin}-${s.hzMax} Hz</span></span>
+                    <button onclick="delS(${s.id})" class="text-red-900 font-bold opacity-50">Kustuta</button>
                 </div>
                 
-                <div class="p-4 bg-green-500/5 rounded-2xl space-y-2 border border-green-500/10">
-                    <p class="text-[9px] font-black text-green-400 uppercase tracking-widest">Puhas vestlus (${s.s}s)</p>
-                    ${s.audioClean ? `<audio src="${s.audioClean}" controls preload="metadata"></audio>` : '<p class="text-[8px] text-slate-600">Heli ei tuvastatud</p>'}
+                <div class="p-4 bg-green-500/5 rounded-2xl space-y-3 border border-green-500/10">
+                    <div class="flex justify-between items-center text-[9px] font-black text-green-400 uppercase">
+                        <span>Puhas vestlus (${s.s}s)</span>
+                        ${s.audioClean ? `<button onclick="dl('${s.audioClean}', 'Puhas_${s.id}')" class="text-green-400 font-bold border border-green-400/20 px-2 py-0.5 rounded">Lata .webm</button>` : ''}
+                    </div>
+                    ${s.audioClean ? `<audio src="${s.audioClean}" controls preload="metadata"></audio>` : '<p class="text-[8px] text-slate-600">Ei tuvastatud</p>'}
                 </div>
 
-                <div class="opacity-30 p-2 space-y-1">
-                    <p class="text-[8px] uppercase font-bold text-slate-400">Toores (+Vaikus ${s.v}s)</p>
+                <div class="opacity-20 p-2 space-y-1">
+                    <p class="text-[8px] uppercase font-bold text-slate-400">Toores puhver (+Vaikus ${s.v}s)</p>
                     <audio src="${s.audioFull}" controls preload="metadata"></audio>
                 </div>
 
-                <button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-3 text-[10px] font-black uppercase text-yellow-500 bg-yellow-500/10 rounded-2xl shadow-sm">Kuva Märge</button>
+                <button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-3 text-[10px] font-black uppercase text-yellow-500 bg-yellow-500/10 rounded-2xl">Kuva Märge</button>
                 <div class="hidden p-4 bg-black/40 rounded-2xl text-xs italic text-slate-300 border-l-2 border-yellow-500">${s.note || '...'}</div>
             </div>`).join('');
     };
 }
 
+window.dl = (d, n) => { const a = document.createElement('a'); a.href = d; a.download = `${n}.webm`; a.click(); };
 window.delS = id => { if(confirm("Kustuta?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id); tx.oncomplete = renderHistory; } };
 
 document.getElementById('manual-fix').onclick = () => fixSession();
