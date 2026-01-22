@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Peegel Pro v69</title>
+    <title>Peegel Pro v72</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -22,7 +22,7 @@
 
         <div id="setup-screen" class="pt-20 flex flex-col items-center">
             <button onclick="startSession()" class="bg-blue-600 w-36 h-36 rounded-full font-black text-2xl text-white shadow-2xl border-4 border-blue-400 active:scale-90">START</button>
-            <p class="mt-4 text-slate-500 text-xs uppercase tracking-widest">v69: Ühtsed Värvid</p>
+            <p class="mt-4 text-slate-500 text-xs uppercase tracking-widest">v72: Restart</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4">
@@ -37,11 +37,11 @@
                     </div>
                     
                     <div class="flex gap-2 font-mono text-[12px] uppercase font-bold items-center">
-                        <span style="color: #60a5fa;" id="hz-min-val">0</span>
+                        <span class="text-cyan-300">Hz</span>
+
+                        <span style="color: #1d4ed8;" id="hz-min-val">0</span>
                         
                         <span class="text-red-500" id="hz-max-val">0</span>
-                        
-                        <span style="color: #1d4ed8; font-weight: 900;">HZ</span>
                     </div>
                 </div>
                 <textarea id="note-input" class="w-full bg-transparent text-sm text-slate-200 focus:outline-none placeholder-slate-700 resize-none font-medium h-32 pt-2" placeholder="Kirjuta märkmed siia..." rows="5"></textarea>
