@@ -3,20 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Peegel Pro v45</title>
+    <title>Peegel Pro v46</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
         .hidden { display: none !important; }
-        audio { height: 35px; width: 100%; border-radius: 12px; filter: invert(1) hue-rotate(180deg) brightness(1.2); }
+        
+        /* Playeri stiil: Türkiissinine (Cyan) */
+        audio { height: 35px; width: 100%; border-radius: 12px; filter: invert(1) hue-rotate(140deg) brightness(1.2); }
         
         #clock { color: #f59e0b; font-weight: 300; }
-        .text-fix-orange { color: #f59e0b; }
-        .text-hz-blue { color: #3b82f6; }
-        .text-silence-red { color: #ef4444; font-weight: 700; }
+        
+        /* Logi värvid */
+        .text-matrix-green { color: #22c55e; }    /* Fikseeritud aeg */
+        .text-hz-low { color: #3b82f6; }          /* Madal Hz - Sinine */
+        .text-hz-high { color: #ef4444; }         /* Kõrge Hz - Punane */
+        .text-silence-orange { color: #f59e0b; }  /* Vaikus - Oranž */
+        
         .text-divider { color: #475569; }
         .btn-delete-dark { color: #b91c1c; font-weight: 800; }
+        
+        /* Monitori tekst türkiisiks */
+        .text-monitor-cyan { color: #22d3ee; }
     </style>
 </head>
 <body class="p-4 min-h-screen flex flex-col items-center">
@@ -36,13 +45,13 @@
                 <div class="flex justify-between items-center">
                     <div id="status-light" class="w-4 h-4 bg-slate-700 rounded-full transition-all duration-300"></div>
                     <div class="flex gap-4 font-mono text-[10px] uppercase">
-                        <span class="text-hz-blue">Min: <span id="hz-min-val">0</span></span>
-                        <span class="text-hz-blue">Max: <span id="hz-max-val">0</span></span>
+                        <span class="text-hz-low">Min: <span id="hz-min-val">0</span></span>
+                        <span class="text-hz-high">Max: <span id="hz-max-val">0</span></span>
                     </div>
                 </div>
                 
                 <div class="grid grid-cols-2 gap-4 text-center border-y border-white/5 py-4">
-                    <div><p class="text-[9px] uppercase text-slate-500 font-black">Vestlus</p><span id="speech-sec" class="text-xl font-bold text-green-400 font-mono">0s</span></div>
+                    <div><p class="text-[9px] uppercase text-slate-500 font-black">Vestlus</p><span id="speech-sec" class="text-xl font-bold text-monitor-cyan font-mono">0s</span></div>
                     <div><p class="text-[9px] uppercase text-slate-500 font-black">Vaikus</p><span id="silence-sec" class="text-xl font-bold text-slate-400 font-mono">0s</span></div>
                 </div>
 
