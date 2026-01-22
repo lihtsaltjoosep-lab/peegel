@@ -1,37 +1,47 @@
+// --- SEADISTUS ---
 const VOLUME_THRESHOLD = 3.8; 
 const MIN_HZ = 80;            
+// -----------------
 
 let isLive = false, speechMs = 0, silenceMs = 0, db, stream = null;
 let audioCtx = null, processor = null, source = null, speechBuffer = [];
 let hzMin = Infinity, hzMax = 0, sessionStartTime = "";
 
-// ABI: Sekundid minutiteks (nt 75s -> 1m 15s)
+// ABI: Sekundite vormindamine minutiteks ja sekunditeks
 function formatTime(ms) {
     const totalSeconds = Math.round(ms / 1000);
     const m = Math.floor(totalSeconds / 60);
     const s = totalSeconds % 60;
-    return m > 0 ? `${m}m ${s}s` : `${s}s`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
 }
 
+// 1. KELL
 setInterval(() => { 
     const c = document.getElementById('clock');
     if(c) c.innerText = new Date().toLocaleTimeString('et-EE'); 
 }, 1000);
 
-const dbReq = indexedDB.open("Peegel_Final_V52", 1);
+// 2. ANDMEBAAS
+const dbReq = indexedDB.open("Peegel_Final_V53", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
+// 3. START SESSIOON
 async function startSession() {
     try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         source = audioCtx.createMediaStreamSource(stream);
+        
+        // Mürafilter
         const filter = audioCtx.createBiquadFilter();
         filter.type = "highpass";
         filter.frequency.value = 100; 
+
         const analyser = audioCtx.createAnalyser();
         processor = audioCtx.createScriptProcessor(4096, 1, 1);
+
         source.connect(filter);
         filter.connect(analyser);
         analyser.connect(processor);
@@ -42,16 +52,21 @@ async function startSession() {
             const inputData = e.inputBuffer.getChannelData(0);
             const data = new Uint8Array(analyser.frequencyBinCount);
             analyser.getByteFrequencyData(data);
+            
             const vol = data.reduce((a,b) => a+b) / data.length;
             let maxVal = -1, maxIdx = -1;
             for (let i = 0; i < data.length/2; i++) { if (data[i] > maxVal) { maxVal = data[i]; maxIdx = i; } }
             const hz = Math.round(maxIdx * (audioCtx.sampleRate/2) / (data.length/2));
+            
             if (hz > 40 && hz < 2000) {
                 if (hz < hzMin) hzMin = hz; if (hz > hzMax) hzMax = hz;
                 document.getElementById('hz-min-val').innerText = hzMin;
                 document.getElementById('hz-max-val').innerText = hzMax;
             }
-            if (vol > VOLUME_THRESHOLD && hz > MIN_HZ) {
+
+            const isSpeaking = vol > VOLUME_THRESHOLD && hz > MIN_HZ;
+
+            if (isSpeaking) {
                 speechMs += (4096 / audioCtx.sampleRate) * 1000;
                 document.getElementById('status-light').style.background = "#22c55e";
                 speechBuffer.push(new Float32Array(inputData));
@@ -59,10 +74,12 @@ async function startSession() {
                 silenceMs += (4096 / audioCtx.sampleRate) * 1000;
                 document.getElementById('status-light').style.background = "#334155";
             }
-            // Kuvamine minutites/sekundites monitoril
+            
+            // Monitori uuendus minutites
             document.getElementById('speech-sec').innerText = formatTime(speechMs);
             document.getElementById('silence-sec').innerText = formatTime(silenceMs);
         };
+
         document.getElementById('setup-screen').classList.add('hidden');
         document.getElementById('active-session').classList.remove('hidden');
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
@@ -70,27 +87,36 @@ async function startSession() {
     } catch (err) { alert("Viga mikkriga!"); }
 }
 
+// 4. FIKSEERI SESSIOON
 async function fixSession() {
     if (!isLive || speechBuffer.length === 0) return;
+    
     const snapNote = document.getElementById('note-input').value;
-    const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
+    const snapStart = sessionStartTime;
+    const snapEnd = new Date().toLocaleTimeString('et-EE');
     const snapStats = { min: hzMin, max: hzMax, s: speechMs, v: silenceMs };
-    const currentSpeech = [...speechBuffer], currentSR = audioCtx.sampleRate;
+    const currentSpeech = [...speechBuffer];
+    const currentSR = audioCtx.sampleRate;
+
+    // Reset
     speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
     document.getElementById('note-input').value = "";
     sessionStartTime = new Date().toLocaleTimeString('et-EE');
+
     const cleanWav = bufferToWav(currentSpeech, currentSR);
     const cleanBase = await toB64(cleanWav);
+
     const tx = db.transaction("sessions", "readwrite");
     tx.objectStore("sessions").add({
         id: Date.now(), start: snapStart, end: snapEnd,
         hzMin: snapStats.min, hzMax: snapStats.max,
         note: snapNote, audioClean: cleanBase,
-        sMs: snapStats.s, vMs: snapStats.v // Salvestame millisekundid täpseks arvutuseks
+        sMs: snapStats.s, vMs: snapStats.v
     });
     tx.oncomplete = () => { renderHistory(); };
 }
 
+// 5. ABI: WAV
 function bufferToWav(chunks, sampleRate) {
     const length = chunks.reduce((acc, curr) => acc + curr.length, 0);
     const buffer = new ArrayBuffer(44 + length * 2);
@@ -114,6 +140,7 @@ function bufferToWav(chunks, sampleRate) {
 
 function toB64(b) { return new Promise(r => { const f = new FileReader(); f.onloadend = () => r(f.result); f.readAsDataURL(b); }); }
 
+// 6. LOGI RENDERDAMINE
 function renderHistory() {
     if(!db) return;
     const tx = db.transaction("sessions", "readonly");
@@ -125,7 +152,7 @@ function renderHistory() {
                     <span class="flex gap-2 items-center font-bold">
                         <span class="text-log-time" style="color: #22c55e;">${s.start}-${s.end}</span>
                         <span class="text-divider" style="color: #334155;">|</span>
-                        <span style="color: #3b82f6;">${s.hzMin}-${s.hzMax} HZ</span>
+                        <span style="color: #3b82f6;">${s.hzMin}-${s.hzMax} <span style="color: #67e8f9;">HZ</span></span>
                         <span class="text-divider" style="color: #334155;">|</span>
                         <span style="color: #f59e0b;">P:${formatTime(s.vMs)}</span>
                     </span>
