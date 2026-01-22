@@ -1,6 +1,6 @@
 const VOLUME_THRESHOLD = 3.8; 
 const MIN_HZ = 80;            
-const AUTO_FIX_MS = 600000; // 10 minutit
+const AUTO_FIX_MS = 600000; 
 
 let isLive = false, speechMs = 0, silenceMs = 0, db, stream = null;
 let audioCtx = null, processor = null, source = null, speechBuffer = [];
@@ -19,7 +19,7 @@ setInterval(() => {
     if(c) c.innerText = new Date().toLocaleTimeString('et-EE'); 
 }, 1000);
 
-const dbReq = indexedDB.open("Peegel_Final_V54", 1);
+const dbReq = indexedDB.open("Peegel_Final_V55", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
@@ -73,41 +73,52 @@ async function startSession() {
 
 async function stopAndSave() {
     if (!isLive) return;
+    document.getElementById('stop-btn').innerText = "SALVESTAN...";
     isLive = false;
     clearInterval(autoFixTimer);
     
-    // Kui puhvris on andmeid, salvestame enne sulgemist
     if (speechBuffer.length > 0) {
-        await fixSession();
+        await fixSession(); // Ootab, kuni salvestamine on valmis
     }
     
-    // Sulgeme mikkri tracks
     if (stream) stream.getTracks().forEach(t => t.stop());
     location.reload();
 }
 
-async function fixSession() {
-    if (!isLive || speechBuffer.length === 0) return;
-    const snapNote = document.getElementById('note-input').value;
-    const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
-    const snapStats = { min: hzMin, max: hzMax, s: speechMs, v: silenceMs };
-    const currentSpeech = [...speechBuffer], currentSR = audioCtx.sampleRate;
-    
-    speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
-    document.getElementById('note-input').value = "";
-    sessionStartTime = new Date().toLocaleTimeString('et-EE');
+function fixSession() {
+    return new Promise((resolve) => {
+        if (!isLive && speechBuffer.length === 0) return resolve();
+        
+        const snapNote = document.getElementById('note-input').value;
+        const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
+        const snapStats = { min: hzMin, max: hzMax, s: speechMs, v: silenceMs };
+        const currentSpeech = [...speechBuffer], currentSR = audioCtx.sampleRate;
+        
+        speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
+        document.getElementById('note-input').value = "";
+        sessionStartTime = new Date().toLocaleTimeString('et-EE');
 
-    const cleanWav = bufferToWav(currentSpeech, currentSR);
-    const cleanBase = await toB64(cleanWav);
-    const tx = db.transaction("sessions", "readwrite");
-    tx.objectStore("sessions").add({
-        id: Date.now(), start: snapStart, end: snapEnd,
-        date: new Date().toLocaleDateString('et-EE'), // Failinime jaoks
-        hzMin: snapStats.min, hzMax: snapStats.max,
-        note: snapNote, audioClean: cleanBase,
-        sMs: snapStats.s, vMs: snapStats.v
+        const cleanWav = bufferToWav(currentSpeech, currentSR);
+        toB64(cleanWav).then(cleanBase => {
+            const tx = db.transaction("sessions", "readwrite");
+            tx.objectStore("sessions").add({
+                id: Date.now(), 
+                start: snapStart, 
+                end: snapEnd,
+                date: new Date().toLocaleDateString('et-EE').replace(/\./g, '_'),
+                hzMin: snapStats.min, 
+                hzMax: snapStats.max,
+                note: snapNote, 
+                audioClean: cleanBase,
+                sMs: snapStats.s, 
+                vMs: snapStats.v
+            });
+            tx.oncomplete = () => { 
+                renderHistory(); 
+                resolve(); 
+            };
+        });
     });
-    tx.oncomplete = () => { renderHistory(); };
 }
 
 function bufferToWav(chunks, sampleRate) {
@@ -128,7 +139,8 @@ function bufferToWav(chunks, sampleRate) {
             offset += 2;
         }
     }
-    return new Blob([buffer], { type: 'audio/wav' });
+    // Muudetud tüüp: octet-stream, et ei avaneks automaatselt pleieris
+    return new Blob([buffer], { type: 'application/octet-stream' });
 }
 
 function toB64(b) { return new Promise(r => { const f = new FileReader(); f.onloadend = () => r(f.result); f.readAsDataURL(b); }); }
@@ -139,9 +151,9 @@ function renderHistory() {
     tx.objectStore("sessions").getAll().onsuccess = e => {
         const list = e.target.result.sort((a,b) => b.id - a.id);
         document.getElementById('history-container').innerHTML = list.map(s => {
-            // Failinime loomine: Kuupäev_Kell_Märge
-            const cleanNote = s.note ? s.note.substring(0, 15).replace(/[^a-z0-9]/gi, '_') : 'Sessioon';
-            const fileName = `${s.date}_${s.start.replace(/:/g, '-')}_${cleanNote}`;
+            // Parandatud failinime loogika: Märge on failinimes näha
+            const cleanNote = s.note ? s.note.substring(0, 20).replace(/[^a-z0-9]/gi, '_') : 'Sessioon';
+            const fileName = `PEEGEL_${s.date}_${s.start.replace(/:/g, '-')}_${cleanNote}.wav`;
             
             return `
             <div class="glass rounded-[30px] p-5 space-y-4 shadow-xl border border-white/5 text-left">
@@ -171,8 +183,13 @@ function renderHistory() {
     };
 }
 
-window.dl = (d, n) => { 
-    const a = document.createElement('a'); a.href = d; a.download = `${n}.wav`; a.click(); 
+window.dl = (dataUri, fileName) => { 
+    const link = document.createElement('a'); 
+    link.href = dataUri; 
+    link.download = fileName; 
+    document.body.appendChild(link);
+    link.click(); 
+    document.body.removeChild(link);
 };
 
 window.delS = id => { 
