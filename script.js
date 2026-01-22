@@ -19,7 +19,7 @@ setInterval(() => {
     if(c) c.innerText = new Date().toLocaleTimeString('et-EE'); 
 }, 1000);
 
-// Kasutame v61 andmebaasi
+// Kasutame v61 andmebaasi edasi, andmed jäävad alles
 const dbReq = indexedDB.open("Peegel_DataCapsule_V61", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
@@ -133,7 +133,7 @@ function bufferToWav(chunks, sampleRate) {
 
 function toB64(b) { return new Promise(r => { const f = new FileReader(); f.onloadend = () => r(f.result); f.readAsDataURL(b); }); }
 
-// ALLALAADIMISE FUNKTSIOON - LOOB KAPSLI
+// ALLALAADIMINE 1: HTML KAPSEL
 function downloadCapsule(id) {
     const tx = db.transaction("sessions", "readonly");
     tx.objectStore("sessions").get(id).onsuccess = (e) => {
@@ -188,7 +188,17 @@ function downloadCapsule(id) {
     };
 }
 
-// LOGI RENDERDAMINE
+// ALLALAADIMINE 2: PUHAS WAV
+function downloadRawWav(audioData, id) {
+    const link = document.createElement('a');
+    link.href = audioData;
+    link.download = `Peegel_Audio_${id}.wav`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// LOGI RENDERDAMINE - 2 NUPPU
 function renderHistory() {
     if(!db) return;
     const tx = db.transaction("sessions", "readonly");
@@ -214,7 +224,12 @@ function renderHistory() {
                 <div class="p-4 bg-blue-500/5 rounded-2xl border border-blue-500/10 mb-3">
                     <div class="flex justify-between items-center text-[9px] font-black text-blue-400 uppercase mb-2">
                         <span>Pikkus: ${formatTime(s.sMs)}</span>
-                        <button onclick="downloadCapsule(${s.id})" class="text-blue-400 border border-blue-400/20 px-2 py-1 rounded hover:bg-blue-500/10 active:scale-95 transition-all">DOWNLOAD HTML</button>
+                        
+                        <div class="flex gap-2">
+                            <button onclick="downloadCapsule(${s.id})" class="text-white bg-blue-600 border-0 px-2 py-1 rounded shadow text-[9px] active:scale-95">HTML</button>
+                            <button onclick="downloadRawWav('${s.audioClean}', '${s.id}')" class="text-white bg-slate-600 border-0 px-2 py-1 rounded shadow text-[9px] active:scale-95">WAV</button>
+                        </div>
+
                     </div>
                     <audio src="${s.audioClean}" controls preload="metadata"></audio>
                 </div>
