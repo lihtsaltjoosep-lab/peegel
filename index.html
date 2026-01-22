@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Peegel Pro v31</title>
+    <title>Peegel Pro v32</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -11,15 +11,15 @@
         .hidden { display: none !important; }
         audio { height: 35px; width: 100%; border-radius: 12px; filter: invert(1) hue-rotate(180deg) brightness(1.2); }
         
-        /* Kell: Heledam ja õhukesem */
-        #clock { color: #fef08a; font-weight: 300; letter-spacing: -0.05em; }
+        /* Kell: Tagasi oranžikas ja õhuke */
+        #clock { color: #f59e0b; font-weight: 300; }
         
-        /* Tekstide värvid logis */
-        .text-time-green { color: #22c55e; } 
-        .text-hz-dim-cyan { color: #0891b2; } /* Tuhmim sinine */
-        .text-silence-bright-red { color: #f87171; font-weight: 700; } /* Punane */
+        /* Logi värvid */
+        .text-fix-orange { color: #f59e0b; } /* Oranž aeg */
+        .text-hz-blue { color: #3b82f6; }   /* Sinine Hz */
+        .text-silence-red { color: #ef4444; } /* Punane vaikus */
         .text-divider { color: #334155; }
-        .btn-delete-hot { color: #ff0000; font-weight: 900; filter: drop-shadow(0 0 5px rgba(255,0,0,0.2)); }
+        .btn-delete-dark { color: #991b1b; font-weight: 800; } /* Tume punane */
     </style>
 </head>
 <body class="p-4 min-h-screen flex flex-col items-center">
@@ -27,7 +27,7 @@
         
         <div class="flex justify-between items-center p-2">
             <h1 class="text-xl font-black text-blue-500 italic uppercase">Peegel</h1>
-            <div id="clock" class="text-3xl font-light">00:00:00</div>
+            <div id="clock" class="text-3xl font-light tracking-tighter">00:00:00</div>
         </div>
 
         <div id="active-session" class="hidden space-y-4">
@@ -35,8 +35,8 @@
                 <div class="flex justify-between items-center">
                     <div id="status-light" class="w-4 h-4 bg-slate-700 rounded-full transition-all"></div>
                     <div class="flex gap-4 font-mono text-[10px] uppercase">
-                        <span class="text-hz-dim-cyan">Min: <span id="hz-min-val">0</span></span>
-                        <span class="text-hz-dim-cyan">Max: <span id="hz-max-val">0</span></span>
+                        <span class="text-hz-blue">Min: <span id="hz-min-val">0</span></span>
+                        <span class="text-hz-blue">Max: <span id="hz-max-val">0</span></span>
                     </div>
                 </div>
                 
@@ -46,7 +46,7 @@
                 </div>
             </div>
 
-            <div class="glass rounded-[25px] p-4 shadow-inner">
+            <div class="glass rounded-[25px] p-4">
                 <textarea id="note-input" class="w-full bg-transparent text-sm text-slate-200 focus:outline-none placeholder-slate-800 resize-none" placeholder="Kirjuta märkmed..." rows="3"></textarea>
             </div>
 
