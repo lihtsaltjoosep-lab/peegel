@@ -19,7 +19,7 @@ setInterval(() => {
     if(c) c.innerText = new Date().toLocaleTimeString('et-EE'); 
 }, 1000);
 
-const dbReq = indexedDB.open("Peegel_Final_V55", 1);
+const dbReq = indexedDB.open("Peegel_Final_V56", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
@@ -76,11 +76,7 @@ async function stopAndSave() {
     document.getElementById('stop-btn').innerText = "SALVESTAN...";
     isLive = false;
     clearInterval(autoFixTimer);
-    
-    if (speechBuffer.length > 0) {
-        await fixSession(); // Ootab, kuni salvestamine on valmis
-    }
-    
+    if (speechBuffer.length > 0) await fixSession();
     if (stream) stream.getTracks().forEach(t => t.stop());
     location.reload();
 }
@@ -88,12 +84,10 @@ async function stopAndSave() {
 function fixSession() {
     return new Promise((resolve) => {
         if (!isLive && speechBuffer.length === 0) return resolve();
-        
         const snapNote = document.getElementById('note-input').value;
         const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
         const snapStats = { min: hzMin, max: hzMax, s: speechMs, v: silenceMs };
         const currentSpeech = [...speechBuffer], currentSR = audioCtx.sampleRate;
-        
         speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
         document.getElementById('note-input').value = "";
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
@@ -102,23 +96,51 @@ function fixSession() {
         toB64(cleanWav).then(cleanBase => {
             const tx = db.transaction("sessions", "readwrite");
             tx.objectStore("sessions").add({
-                id: Date.now(), 
-                start: snapStart, 
-                end: snapEnd,
-                date: new Date().toLocaleDateString('et-EE').replace(/\./g, '_'),
-                hzMin: snapStats.min, 
-                hzMax: snapStats.max,
-                note: snapNote, 
-                audioClean: cleanBase,
-                sMs: snapStats.s, 
-                vMs: snapStats.v
+                id: Date.now(), start: snapStart, end: snapEnd,
+                date: new Date().toLocaleDateString('et-EE'),
+                hzMin: snapStats.min, hzMax: snapStats.max,
+                note: snapNote, audioClean: cleanBase,
+                sMs: snapStats.s, vMs: snapStats.v
             });
-            tx.oncomplete = () => { 
-                renderHistory(); 
-                resolve(); 
-            };
+            tx.oncomplete = () => { renderHistory(); resolve(); };
         });
     });
+}
+
+// ABI: Luuakse puhas tekstifaili sisu
+function createInfoText(s) {
+    return `PEEGEL SESSIOON\r\n` +
+           `Kuupäev: ${s.date}\r\n` +
+           `Aeg: ${s.start} - ${s.end}\r\n` +
+           `Sagedus: ${s.hzMin} - ${s.hzMax} Hz\r\n` +
+           `Vestlus: ${formatTime(s.sMs)}\r\n` +
+           `Pausid: ${formatTime(s.vMs)}\r\n\r\n` +
+           `MÄRKMED:\r\n${s.note || 'Märkmed puuduvad'}`;
+}
+
+// UUS: ZIP-faili allalaadimine (Heli + Tekst)
+async function dlZip(id) {
+    const tx = db.transaction("sessions", "readonly");
+    tx.objectStore("sessions").get(id).onsuccess = async (e) => {
+        const s = e.target.result;
+        const zip = new JSZip();
+        const fileNameBase = `Peegel_${s.date}_${s.start.replace(/:/g, '-')}`;
+        
+        // 1. Lisa heli
+        const audioBlob = await fetch(s.audioClean).then(r => r.blob());
+        zip.file(`${fileNameBase}.wav`, audioBlob);
+        
+        // 2. Lisa tekst
+        zip.file(`${fileNameBase}_info.txt`, createInfoText(s));
+        
+        // 3. Genereeri ja laadi alla
+        zip.generateAsync({type:"blob"}).then(function(content) {
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(content);
+            link.download = `${fileNameBase}.zip`;
+            link.click();
+        });
+    };
 }
 
 function bufferToWav(chunks, sampleRate) {
@@ -139,8 +161,7 @@ function bufferToWav(chunks, sampleRate) {
             offset += 2;
         }
     }
-    // Muudetud tüüp: octet-stream, et ei avaneks automaatselt pleieris
-    return new Blob([buffer], { type: 'application/octet-stream' });
+    return new Blob([buffer], { type: 'audio/wav' });
 }
 
 function toB64(b) { return new Promise(r => { const f = new FileReader(); f.onloadend = () => r(f.result); f.readAsDataURL(b); }); }
@@ -150,13 +171,8 @@ function renderHistory() {
     const tx = db.transaction("sessions", "readonly");
     tx.objectStore("sessions").getAll().onsuccess = e => {
         const list = e.target.result.sort((a,b) => b.id - a.id);
-        document.getElementById('history-container').innerHTML = list.map(s => {
-            // Parandatud failinime loogika: Märge on failinimes näha
-            const cleanNote = s.note ? s.note.substring(0, 20).replace(/[^a-z0-9]/gi, '_') : 'Sessioon';
-            const fileName = `PEEGEL_${s.date}_${s.start.replace(/:/g, '-')}_${cleanNote}.wav`;
-            
-            return `
-            <div class="glass rounded-[30px] p-5 space-y-4 shadow-xl border border-white/5 text-left">
+        document.getElementById('history-container').innerHTML = list.map(s => `
+            <div class="glass rounded-[30px] p-5 space-y-4 shadow-xl border border-white/5 text-left mb-4">
                 <div class="flex justify-between items-center text-[11px] uppercase tracking-tight font-bold">
                     <span class="flex gap-2 items-center">
                         <span style="color: #22c55e;">${s.start}-${s.end}</span>
@@ -170,7 +186,7 @@ function renderHistory() {
                 <div class="p-4 bg-blue-500/5 rounded-2xl space-y-3 border border-blue-500/10">
                     <div class="flex justify-between items-center text-[9px] font-black text-blue-400 uppercase tracking-widest">
                         <span>Puhas vestlus (${formatTime(s.sMs)})</span>
-                        <button onclick="dl('${s.audioClean}', '${fileName}')" class="text-blue-400 border border-blue-400/20 px-2 py-0.5 rounded">Download</button>
+                        <button onclick="dlZip(${s.id})" class="text-blue-400 border border-blue-400/20 px-2 py-0.5 rounded">Download ZIP</button>
                     </div>
                     <audio src="${s.audioClean}" controls preload="metadata"></audio>
                 </div>
@@ -178,24 +194,8 @@ function renderHistory() {
                 <button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-3 text-[10px] font-black uppercase bg-blue-500/10 rounded-2xl" style="color: #3b82f6;">Kuva Märge</button>
                 <div class="hidden p-4 bg-black/40 rounded-2xl text-xs italic text-slate-300 border-l-2 border-blue-500">${s.note}</div>
                 ` : ''}
-            </div>`;
-        }).join('');
+            </div>`).join('');
     };
 }
 
-window.dl = (dataUri, fileName) => { 
-    const link = document.createElement('a'); 
-    link.href = dataUri; 
-    link.download = fileName; 
-    document.body.appendChild(link);
-    link.click(); 
-    document.body.removeChild(link);
-};
-
-window.delS = id => { 
-    if(confirm("Kustuta?")) { 
-        const tx = db.transaction("sessions", "readwrite"); 
-        tx.objectStore("sessions").delete(id); 
-        tx.oncomplete = renderHistory; 
-    } 
-};
+window.delS = id => { if(confirm("Kustuta?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id); tx.oncomplete = renderHistory; } };
