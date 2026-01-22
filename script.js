@@ -1,15 +1,14 @@
 let isLive = false, speechMs = 0, silenceMs = 0, db, stream, mediaRecorder, wakeLock = null;
-let fullChunks = [], cleanChunks = [], speechMap = [], pitchHistory = [];
+let chunks = [], speechMap = [];
 let sessionStartTime = "", autoFixInterval;
 let hzMin = Infinity, hzMax = 0;
-let isSpeakingGlobal = false;
 
 setInterval(() => { 
     const clock = document.getElementById('clock');
     if(clock) clock.innerText = new Date().toLocaleTimeString('et-EE'); 
 }, 1000);
 
-const dbReq = indexedDB.open("Peegel_V30_DB", 1);
+const dbReq = indexedDB.open("Peegel_V31_PostProcess", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
@@ -29,18 +28,7 @@ document.getElementById('start-btn').onclick = async () => {
         processor.connect(ctx.destination);
 
         mediaRecorder = new MediaRecorder(stream);
-        
-        mediaRecorder.ondataavailable = e => { 
-            if (e.data.size > 0 && isLive) {
-                // Lisame alati täispikka puhvrisse
-                fullChunks.push(e.data);
-                
-                // PUHAS FILTRU: Lisame puhtasse massiivi andmeid AINULT siis, kui räägitakse
-                if (isSpeakingGlobal) {
-                    cleanChunks.push(e.data);
-                }
-            }
-        };
+        mediaRecorder.ondataavailable = e => { if (e.data.size > 0 && isLive) chunks.push({ blob: e.data, t: Date.now() }); };
 
         processor.onaudioprocess = () => {
             if (!isLive) return;
@@ -59,21 +47,19 @@ document.getElementById('start-btn').onclick = async () => {
                 document.getElementById('hz-max-val').innerText = hzMax;
             }
 
-            // TUNDLIKKUSE KONTROLL
-            isSpeakingGlobal = (vol > 2.8 && hz > 50);
-            
-            if (isSpeakingGlobal) {
-                speechMs += 50;
-                document.getElementById('status-light').style.background = "#22c55e";
+            const t = Date.now();
+            const isSpeaking = vol > 2.8 && hz > 50;
+            if (isSpeaking) {
+                speechMs += 50; document.getElementById('status-light').style.background = "#22c55e";
             } else {
-                silenceMs += 50;
-                document.getElementById('status-light').style.background = "#334155";
+                silenceMs += 50; document.getElementById('status-light').style.background = "#334155";
             }
+            speechMap.push({ t: t, s: isSpeaking });
             document.getElementById('speech-sec').innerText = Math.round(speechMs/1000) + "s";
             document.getElementById('silence-sec').innerText = Math.round(silenceMs/1000) + "s";
         };
 
-        mediaRecorder.start(100); // 100ms tükid võimaldavad reaalajas filtreerimist
+        mediaRecorder.start(200);
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
         isLive = true;
         autoFixInterval = setInterval(() => fixSession(), 600000); 
@@ -82,37 +68,59 @@ document.getElementById('start-btn').onclick = async () => {
 
 async function fixSession(callback) {
     if (!mediaRecorder || mediaRecorder.state === "inactive") return;
-    
     const snapNote = document.getElementById('note-input').value;
-    const snapStart = sessionStartTime;
-    const snapEnd = new Date().toLocaleTimeString('et-EE');
+    const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
     const snapStats = { min: hzMin, max: hzMax, s: speechMs, v: silenceMs };
-    const finalFull = [...fullChunks];
-    const finalClean = [...cleanChunks];
+    const snapChunks = [...chunks], snapMap = [...speechMap];
 
     mediaRecorder.onstop = async () => {
         // RESET
-        fullChunks = []; cleanChunks = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
+        chunks = []; speechMap = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
         document.getElementById('note-input').value = "";
-        if (isLive) mediaRecorder.start(100);
+        if (isLive) mediaRecorder.start(200);
 
-        const fullBlob = new Blob(finalFull, { type: 'audio/webm' });
-        const cleanBlob = finalClean.length > 0 ? new Blob(finalClean, { type: 'audio/webm' }) : null;
-
+        const fullBlob = new Blob(snapChunks.map(c => c.blob), { type: 'audio/webm' });
         const fullBase = await toB64(fullBlob);
-        const cleanBase = cleanBlob ? await toB64(cleanBlob) : null;
 
         const tx = db.transaction("sessions", "readwrite");
         tx.objectStore("sessions").add({
             id: Date.now(), start: snapStart, end: snapEnd,
-            hzMin: snapStats.min === Infinity ? 0 : snapStats.min, hzMax: snapStats.max,
-            note: snapNote, audioFull: fullBase, audioClean: cleanBase,
-            s: Math.round(snapStats.s/1000), v: Math.round(snapStats.v/1000)
+            hzMin: snapStats.min, hzMax: snapStats.max,
+            note: snapNote, audioFull: fullBase, audioClean: null, // Clean on alguses null
+            s: Math.round(snapStats.s/1000), v: Math.round(snapStats.v/1000),
+            rawChunks: snapChunks, rawMap: snapMap // Hoiame andmed töötluseks alles
         });
         tx.oncomplete = () => { renderHistory(); if (callback) callback(); };
     };
     mediaRecorder.stop();
+}
+
+// NUTIKAS LÕIKAMINE NUPU VAJUTUSEL
+async function processSilence(id) {
+    const btn = document.getElementById(`proc-btn-${id}`);
+    btn.innerText = "Töötlen...";
+    btn.disabled = true;
+
+    const tx = db.transaction("sessions", "readwrite");
+    const store = tx.objectStore("sessions");
+    
+    store.get(id).onsuccess = async (e) => {
+        const s = e.target.result;
+        
+        // Me loome füüsiliselt uue faili ainult nendest tükkidest, mis on kõne
+        const cleanBlobs = s.rawChunks.filter(c => {
+            return s.rawMap.some(m => m.s && Math.abs(m.t - c.t) < 1200);
+        }).map(c => c.blob);
+
+        if (cleanBlobs.length > 0) {
+            const cleanBlob = new Blob(cleanBlobs, { type: 'audio/webm' });
+            s.audioClean = await toB64(cleanBlob);
+            store.put(s); // Salvestame uuendatud sessiooni
+        }
+        
+        tx.oncomplete = () => { renderHistory(); };
+    };
 }
 
 function toB64(b) { return new Promise(r => { const f = new FileReader(); f.onloadend = () => r(f.result); f.readAsDataURL(b); }); }
@@ -128,23 +136,27 @@ function renderHistory() {
                     <span>
                         <span class="text-time-green">${s.start}-${s.end}</span>
                         <span class="text-divider"> | </span>
-                        <span class="text-hz-cyan">${s.hzMin}-${s.hzMax} Hz</span>
+                        <span class="text-hz-dim-cyan">${s.hzMin}-${s.hzMax} Hz</span>
                         <span class="text-divider"> | </span>
-                        <span class="text-silence-red">V: ${s.v}s</span>
+                        <span class="text-silence-bright-red">V: ${s.v}s</span>
                     </span>
-                    <button onclick="delS(${s.id})" class="btn-delete">KUSTUTA</button>
+                    <button onclick="delS(${s.id})" class="btn-delete-hot">KUSTUTA</button>
                 </div>
                 
-                <div class="p-4 bg-green-500/5 rounded-2xl space-y-2 border border-green-500/10">
+                <div class="p-4 bg-green-500/5 rounded-2xl space-y-3 border border-green-500/10">
                     <div class="flex justify-between items-center text-[9px] font-black text-green-400 uppercase tracking-widest">
                         <span>Puhas vestlus (${s.s}s)</span>
-                        <button onclick="dl('${s.audioClean}', 'Puhas_${s.id}')" class="text-green-400 border border-green-400/20 px-2 py-0.5 rounded">Lata .webm</button>
+                        ${s.audioClean ? `
+                            <button onclick="dl('${s.audioClean}', 'Puhas_${s.id}')" class="text-green-400 border border-green-400/20 px-2 py-0.5 rounded">Lata .webm</button>
+                        ` : `
+                            <button id="proc-btn-${s.id}" onclick="processSilence(${s.id})" class="bg-blue-600/40 text-blue-300 px-3 py-1 rounded-lg">Eemalda vaikus</button>
+                        `}
                     </div>
-                    ${s.audioClean ? `<audio src="${s.audioClean}" controls preload="metadata"></audio>` : '<p class="text-[8px] text-slate-600 uppercase">Heli ei tuvastatud</p>'}
+                    ${s.audioClean ? `<audio src="${s.audioClean}" controls preload="metadata"></audio>` : '<p class="text-[8px] text-slate-500 italic">Vajuta nuppu vaikuse eemaldamiseks</p>'}
                 </div>
 
-                <div class="opacity-10 p-2 space-y-1">
-                    <p class="text-[8px] uppercase font-bold text-slate-400">Toores puhver (Täispikkus)</p>
+                <div class="opacity-10 p-2">
+                    <p class="text-[8px] uppercase font-bold text-slate-400">Toores fail</p>
                     <audio src="${s.audioFull}" controls preload="metadata"></audio>
                 </div>
 
