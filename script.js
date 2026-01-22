@@ -58,6 +58,7 @@ document.getElementById('start-btn').onclick = async () => {
             }
 
             const t = Date.now();
+            // LÄVI: vol > 2.5 on hääle tuvastus
             if (vol > 2.5 && hz > 50) { 
                 speechMs += 50;
                 document.getElementById('status-light').style.background = "#22c55e";
@@ -74,27 +75,30 @@ document.getElementById('start-btn').onclick = async () => {
         mediaRecorder.start(100);
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
         isLive = true;
-        autoFixInterval = setInterval(() => fixSession(), 600000); // 10 min
-    } catch (err) { alert("Mikker ei käivitunud."); }
+        autoFixInterval = setInterval(() => fixSession(), 600000); 
+    } catch (err) { alert("Mikker ei käivinunud."); }
 };
 
 async function fixSession(callback) {
     if (!mediaRecorder || mediaRecorder.state === "inactive") return;
     const endTime = new Date().toLocaleTimeString('et-EE');
     const note = document.getElementById('note-input').value;
+    
+    // Lukustame andmed töötlemiseks
     const currentChunks = [...chunks];
     const currentMap = [...speechMap];
     const stats = { min: hzMin, max: hzMax, s: speechMs, v: silenceMs };
 
     mediaRecorder.onstop = async () => {
-        // Puhastame vestluse (lisame 0.5s puhvrit ümber märkmete, et ei hakkiks)
+        // TUGEVDATUD FILTREERIMINE: 
+        // Võtame helitüki kaasa, kui 1 sekundi raadiuses on tuvastatud kõnet
         const cleanChunks = currentChunks.filter(c => {
-            const point = currentMap.find(m => Math.abs(m.t - c.t) < 300);
-            return point ? point.s : false;
+            const hasSpeechNearby = currentMap.some(m => m.s && Math.abs(m.t - c.t) < 1000);
+            return hasSpeechNearby;
         }).map(c => c.blob);
 
-        const fullB = new Blob(currentChunks.map(c => c.blob), { type: 'audio/webm' });
-        const cleanB = new Blob(cleanChunks, { type: 'audio/webm' });
+        const fullB = new Blob(currentChunks.map(c => c.blob), { type: 'audio/webm;codecs=opus' });
+        const cleanB = new Blob(cleanChunks, { type: 'audio/webm;codecs=opus' });
 
         const fullBase = await toB64(fullB);
         const cleanBase = await toB64(cleanB);
@@ -113,6 +117,7 @@ async function fixSession(callback) {
 
         tx.oncomplete = () => {
             renderHistory();
+            // Reset
             chunks = []; speechMap = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
             document.getElementById('note-input').value = "";
             sessionStartTime = new Date().toLocaleTimeString('et-EE');
@@ -138,21 +143,15 @@ function renderHistory() {
                     <button onclick="delS(${s.id})" class="text-red-900 font-bold uppercase">Kustuta</button>
                 </div>
                 <div class="p-4 bg-green-500/5 rounded-2xl space-y-2 border border-green-500/10">
-                    <div class="flex justify-between items-center text-[9px] font-black text-green-400 uppercase tracking-widest">
-                        <span>Puhas vestlus (${s.s}s)</span>
-                        <button onclick="dl('${s.audioClean}', 'Puhas_${s.id}')" class="bg-green-500/20 px-2 py-1 rounded">Lata</button>
-                    </div>
-                    <audio src="${s.audioClean}" controls preload="metadata"></audio>
+                    <p class="text-[9px] font-black text-green-400 uppercase tracking-widest">Puhas vestlus (${s.s}s)</p>
+                    <audio src="${s.audioClean}" controls preload="auto"></audio>
                 </div>
                 <div class="opacity-30 p-2 space-y-1">
-                    <div class="flex justify-between text-[8px] uppercase font-bold text-slate-400">
-                        <span>Toores (+Vaikus ${s.v}s)</span>
-                        <button onclick="dl('${s.audioFull}', 'Toores_${s.id}')">Lata</button>
-                    </div>
-                    <audio src="${s.audioFull}" controls preload="metadata"></audio>
+                    <p class="text-[8px] uppercase font-bold text-slate-400">Toores (+Vaikus ${s.v}s)</p>
+                    <audio src="${s.audioFull}" controls preload="auto"></audio>
                 </div>
-                <button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-2 text-[9px] font-black uppercase text-slate-500 bg-white/5 rounded-xl">Kuva märge</button>
-                <div class="hidden p-4 bg-black/40 rounded-2xl text-xs italic text-slate-300 border-l-2 border-blue-600">${s.note || 'Märkmeid ei ole.'}</div>
+                <button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-2 text-[9px] font-black uppercase text-slate-500 bg-white/5 rounded-xl">Märge</button>
+                <div class="hidden p-4 bg-black/40 rounded-2xl text-xs italic text-slate-300 border-l-2 border-blue-600">${s.note || '...'}</div>
             </div>`).join('');
     };
 }
@@ -162,5 +161,5 @@ window.delS = id => { if(confirm("Kustuta?")) { const tx = db.transaction("sessi
 
 document.getElementById('manual-fix').onclick = () => fixSession();
 document.getElementById('stop-session').onclick = () => {
-    if(confirm("Lõpeta sessioon?")) { isLive = false; clearInterval(autoFixInterval); if(wakeLock) wakeLock.release(); fixSession(() => location.reload()); }
+    if(confirm("Lõpeta?")) { isLive = false; clearInterval(autoFixInterval); if(wakeLock) wakeLock.release(); fixSession(() => location.reload()); }
 };
