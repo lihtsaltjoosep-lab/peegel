@@ -1,8 +1,9 @@
-const VOLUME_THRESHOLD = 3.8; 
+// MUUDATUS 1: Tõstsin helitugevuse lävendit (enne oli 3.8), et ei korjaks taustamüra
+const VOLUME_THRESHOLD = 6.0; 
 const MIN_HZ = 80;            
 const AUTO_FIX_MS = 600000; 
-// UUS REEGEL: Kõnet peab olema vähemalt 1 sekund (1000ms), et salvestada
-const MIN_SPEECH_TO_SAVE_MS = 1000; 
+// MUUDATUS 2: Kõnet peab olema vähemalt 2 sekundit, muidu on praht
+const MIN_SPEECH_TO_SAVE_MS = 2000; 
 
 let isLive = false, speechMs = 0, silenceMs = 0, db, stream = null;
 let audioCtx = null, processor = null, source = null, speechBuffer = [];
@@ -55,6 +56,8 @@ async function startSession() {
                 document.getElementById('hz-min-val').innerText = hzMin;
                 document.getElementById('hz-max-val').innerText = hzMax;
             }
+            
+            // Siin on rangem kontroll
             if (vol > VOLUME_THRESHOLD && hz > MIN_HZ) {
                 speechMs += (4096 / audioCtx.sampleRate) * 1000;
                 document.getElementById('status-light').style.background = "#22c55e";
@@ -76,33 +79,34 @@ async function startSession() {
 
 async function stopAndSave() {
     if (!isLive) return;
-    document.getElementById('stop-btn').innerText = "SALVESTAN...";
+    document.getElementById('stop-btn').innerText = "KONTROLLIN...";
     isLive = false;
     clearInterval(autoFixTimer);
     
-    // Siin kutsume salvestuse välja. Kui on liiga lühike, siis fixSession viskab minema.
-    await fixSession();
+    // Siin kutsume salvestuse välja.
+    await fixSession(true); // true tähendab, et see on lõplik salvestamine
     
     if (stream) stream.getTracks().forEach(t => t.stop());
     location.reload();
 }
 
-function fixSession() {
+function fixSession(isFinal = false) {
     return new Promise((resolve) => {
-        // --- PARANDATUD KONTROLL v65 ---
-        // Kui kasulikku juttu (speechMs) on vähem kui 1 sekund, siis viska prügikasti.
-        // See välistab kogemata tehtud klõpsud ja tühjuse.
-        if (speechMs < MIN_SPEECH_TO_SAVE_MS || speechBuffer.length === 0) {
-            console.log("Sessioon oli liiga lühike või tühi - ei salvesta.");
+        // --- KARM KONTROLL v66 ---
+        // Kui juttu on alla 2 sekundi JA puhver on tühi või väike -> prügikasti
+        if (speechMs < MIN_SPEECH_TO_SAVE_MS) {
+            if (isFinal) {
+                alert("Sessioon oli liiga lühike (alla 2s) või tühi.\nEi salvestanud.");
+            }
             speechBuffer = [];
             speechMs = 0;
             silenceMs = 0;
             hzMin = Infinity; 
             hzMax = 0;
             document.getElementById('note-input').value = ""; 
-            return resolve(); // Lahkume kohe
+            return resolve(); // Lahkume kohe, midagi andmebaasi ei lähe
         }
-        // -------------------------------
+        // -------------------------
 
         const snapNote = document.getElementById('note-input').value;
         const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
