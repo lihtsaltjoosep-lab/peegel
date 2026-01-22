@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Peegel Pro v30</title>
+    <title>Peegel Pro v31</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -11,13 +11,15 @@
         .hidden { display: none !important; }
         audio { height: 35px; width: 100%; border-radius: 12px; filter: invert(1) hue-rotate(180deg) brightness(1.2); }
         
-        /* Värvid */
-        .text-time-green { color: #22c55e; } /* Pleieri roheline */
-        .text-hz-cyan { color: #22d3ee; }    /* Türkiis */
-        .text-silence-red { color: #ef4444; } /* Punane */
-        .text-divider { color: #475569; }     /* Neutraalne hall */
-        .btn-delete { color: #ff4444; font-weight: 800; opacity: 0.8; }
-        .btn-delete:hover { opacity: 1; }
+        /* Kell: Heledam ja õhukesem */
+        #clock { color: #fef08a; font-weight: 300; letter-spacing: -0.05em; }
+        
+        /* Tekstide värvid logis */
+        .text-time-green { color: #22c55e; } 
+        .text-hz-dim-cyan { color: #0891b2; } /* Tuhmim sinine */
+        .text-silence-bright-red { color: #f87171; font-weight: 700; } /* Punane */
+        .text-divider { color: #334155; }
+        .btn-delete-hot { color: #ff0000; font-weight: 900; filter: drop-shadow(0 0 5px rgba(255,0,0,0.2)); }
     </style>
 </head>
 <body class="p-4 min-h-screen flex flex-col items-center">
@@ -25,7 +27,7 @@
         
         <div class="flex justify-between items-center p-2">
             <h1 class="text-xl font-black text-blue-500 italic uppercase">Peegel</h1>
-            <div id="clock" class="text-2xl font-mono text-yellow-500">00:00:00</div>
+            <div id="clock" class="text-3xl font-light">00:00:00</div>
         </div>
 
         <div id="active-session" class="hidden space-y-4">
@@ -33,8 +35,8 @@
                 <div class="flex justify-between items-center">
                     <div id="status-light" class="w-4 h-4 bg-slate-700 rounded-full transition-all"></div>
                     <div class="flex gap-4 font-mono text-[10px] uppercase">
-                        <span class="text-hz-cyan">Min: <span id="hz-min-val">0</span></span>
-                        <span class="text-hz-cyan">Max: <span id="hz-max-val">0</span></span>
+                        <span class="text-hz-dim-cyan">Min: <span id="hz-min-val">0</span></span>
+                        <span class="text-hz-dim-cyan">Max: <span id="hz-max-val">0</span></span>
                     </div>
                 </div>
                 
@@ -58,9 +60,9 @@
             <button id="start-btn" class="bg-blue-600 w-36 h-36 rounded-full font-black text-2xl text-white shadow-2xl border-4 border-blue-400">START</button>
         </div>
 
-        <div class="w-full space-y-4 pt-4 pb-24 text-center">
-            <h3 class="text-[10px] font-black uppercase tracking-[0.4em] text-slate-700 italic">Logi</h3>
-            <div id="history-container" class="space-y-4 text-left"></div>
+        <div class="w-full space-y-4 pt-4 pb-24">
+            <h3 class="text-[10px] font-black uppercase tracking-[0.4em] text-slate-700 text-center italic">Logi</h3>
+            <div id="history-container" class="space-y-4"></div>
         </div>
     </div>
     <script src="script.js"></script>
