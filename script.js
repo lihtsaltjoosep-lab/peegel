@@ -10,7 +10,7 @@ setInterval(() => {
 }, 1000);
 
 // ANDMEBAAS
-const dbReq = indexedDB.open("Peegel_Final_V23", 1);
+const dbReq = indexedDB.open("Peegel_V23_Final", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
@@ -34,8 +34,10 @@ document.getElementById('start-btn').onclick = async () => {
         processor.connect(ctx.destination);
 
         mediaRecorder = new MediaRecorder(stream);
+        
+        // Kogume andmeid
         mediaRecorder.ondataavailable = e => { 
-            if (e.data.size > 0 && isLive) { 
+            if (e.data.size > 0) { 
                 chunks.push({ blob: e.data, t: Date.now() }); 
             } 
         };
@@ -58,8 +60,8 @@ document.getElementById('start-btn').onclick = async () => {
             }
 
             const t = Date.now();
-            // LÄVI: vol > 2.5 on hääle tuvastus
-            if (vol > 2.5 && hz > 50) { 
+            // TUNDLIKKUS: vol > 2.0 on juba sosin
+            if (vol > 2.0 && hz > 50) { 
                 speechMs += 50;
                 document.getElementById('status-light').style.background = "#22c55e";
                 speechMap.push({ t: t, s: true });
@@ -72,59 +74,63 @@ document.getElementById('start-btn').onclick = async () => {
             document.getElementById('silence-sec').innerText = Math.round(silenceMs/1000) + "s";
         };
 
-        mediaRecorder.start(100);
+        mediaRecorder.start(200); // Suurem intervall stabiilsuse jaoks
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
         isLive = true;
         autoFixInterval = setInterval(() => fixSession(), 600000); 
-    } catch (err) { alert("Mikker ei käivinunud."); }
+    } catch (err) { alert("Viga mikkriga."); }
 };
 
 async function fixSession(callback) {
     if (!mediaRecorder || mediaRecorder.state === "inactive") return;
-    const endTime = new Date().toLocaleTimeString('et-EE');
-    const note = document.getElementById('note-input').value;
     
-    // Lukustame andmed töötlemiseks
-    const currentChunks = [...chunks];
-    const currentMap = [...speechMap];
-    const stats = { min: hzMin, max: hzMax, s: speechMs, v: silenceMs };
+    // Võtame andmetest koopia enne stop-imist
+    const snapNote = document.getElementById('note-input').value;
+    const snapStart = sessionStartTime;
+    const snapEnd = new Date().toLocaleTimeString('et-EE');
+    const snapStats = { min: hzMin, max: hzMax, s: speechMs, v: silenceMs };
+    const snapChunks = [...chunks];
+    const snapMap = [...speechMap];
 
     mediaRecorder.onstop = async () => {
-        // TUGEVDATUD FILTREERIMINE: 
-        // Võtame helitüki kaasa, kui 1 sekundi raadiuses on tuvastatud kõnet
-        const cleanChunks = currentChunks.filter(c => {
-            const hasSpeechNearby = currentMap.some(m => m.s && Math.abs(m.t - c.t) < 1000);
-            return hasSpeechNearby;
+        // RESET reaalaja andmetele kohe
+        chunks = []; speechMap = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
+        sessionStartTime = new Date().toLocaleTimeString('et-EE');
+        document.getElementById('note-input').value = "";
+        if (isLive) mediaRecorder.start(200);
+
+        // TÖÖTLEMINE: Filtreerime välja ainult vestlusega tükid
+        // Kasutame 1.5 sekundilist "akent", et jutt ei hakkiks
+        const cleanBlobs = snapChunks.filter(c => {
+            return snapMap.some(m => m.s && Math.abs(m.t - c.t) < 1500);
         }).map(c => c.blob);
 
-        const fullB = new Blob(currentChunks.map(c => c.blob), { type: 'audio/webm;codecs=opus' });
-        const cleanB = new Blob(cleanChunks, { type: 'audio/webm;codecs=opus' });
+        const fullBlob = new Blob(snapChunks.map(c => c.blob), { type: 'audio/webm' });
+        const cleanBlob = new Blob(cleanBlobs, { type: 'audio/webm' });
 
-        const fullBase = await toB64(fullB);
-        const cleanBase = await toB64(cleanB);
+        const fullBase = await toB64(fullBlob);
+        const cleanBase = await toB64(cleanBlob);
 
         const tx = db.transaction("sessions", "readwrite");
         tx.objectStore("sessions").add({
             id: Date.now(),
-            start: sessionStartTime,
-            end: endTime,
-            hzMin: stats.min === Infinity ? 0 : stats.min, 
-            hzMax: stats.max,
-            note: note,
-            audioFull: fullBase, audioClean: cleanBase,
-            s: Math.round(stats.s/1000), v: Math.round(stats.v/1000)
+            start: snapStart,
+            end: snapEnd,
+            hzMin: snapStats.min === Infinity ? 0 : snapStats.min, 
+            hzMax: snapStats.max,
+            note: snapNote,
+            audioFull: fullBase, 
+            audioClean: cleanBase,
+            s: Math.round(snapStats.s/1000), 
+            v: Math.round(snapStats.v/1000)
         });
 
         tx.oncomplete = () => {
             renderHistory();
-            // Reset
-            chunks = []; speechMap = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
-            document.getElementById('note-input').value = "";
-            sessionStartTime = new Date().toLocaleTimeString('et-EE');
-            if (isLive) mediaRecorder.start(100);
             if (callback) callback();
         };
     };
+    
     mediaRecorder.stop();
 }
 
@@ -135,8 +141,7 @@ function renderHistory() {
     const tx = db.transaction("sessions", "readonly");
     tx.objectStore("sessions").getAll().onsuccess = e => {
         const list = e.target.result.sort((a,b) => b.id - a.id);
-        const container = document.getElementById('history-container');
-        container.innerHTML = list.map(s => `
+        document.getElementById('history-container').innerHTML = list.map(s => `
             <div class="glass rounded-[30px] p-5 space-y-4 shadow-xl border border-white/5">
                 <div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase">
                     <span>${s.start}-${s.end} | ${s.hzMin}-${s.hzMax}Hz</span>
@@ -156,7 +161,6 @@ function renderHistory() {
     };
 }
 
-window.dl = (d, n) => { const a = document.createElement('a'); a.href = d; a.download = `${n}.webm`; a.click(); };
 window.delS = id => { if(confirm("Kustuta?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id); tx.oncomplete = renderHistory; } };
 
 document.getElementById('manual-fix').onclick = () => fixSession();
