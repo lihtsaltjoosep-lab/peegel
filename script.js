@@ -1,6 +1,6 @@
 let isLive = false, speechMs = 0, silenceMs = 0, db, stream, mediaRecorder, wakeLock = null;
 let chunks = [], sessionStartTime = "", pitchHistory = [], silenceTimeout = null;
-let preBuffer = []; // Hoiab viimast 1.2s vaikust, et see kõne algusse kleepida
+let preBuffer = []; 
 
 // 1. KELL
 setInterval(() => { 
@@ -13,7 +13,7 @@ const dbReq = indexedDB.open("Peegel_Final_DB", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("log", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
-// 3. ANALÜÜS JA NUTIKAS FILTREERIMINE
+// 3. ANALÜÜS JA FILTREERITUD SALVESTUS
 async function startApp() {
     try {
         stream = await navigator.mediaDevices.getUserMedia({ 
@@ -29,16 +29,17 @@ async function startApp() {
         
         mediaRecorder = new MediaRecorder(stream);
         
-        // SELLE LOOGIKAGA FILTREERIME VAIKUSE VÄLJA:
+        // FILTREERIMISE TUUM:
         mediaRecorder.ondataavailable = e => {
             if (e.data.size > 0 && isLive) {
-                const isSpeechActive = document.getElementById('status-light').style.background === "rgb(34, 197, 94)";
+                // KONTROLL: Kas praegu on kõne VÕI oleme 1.2s "lõpuakna" sees?
+                const isStatusGreen = document.getElementById('status-light').style.background === "rgb(34, 197, 94)";
                 
-                if (isSpeechActive || silenceTimeout) {
-                    // Kui on kõne või 1.2s lõpuaken, siis salvestame
+                if (isStatusGreen || silenceTimeout !== null) {
+                    // AINULT SIIN toimub pärismällu salvestamine
                     chunks.push(e.data);
                 } else {
-                    // Kui on vaikus, hoiame ainult viimast 1.2s puhvris (ca 12 tükki)
+                    // Vaikuse ajal kogume ainult pre-bufferit (1.2s jagu)
                     preBuffer.push(e.data);
                     if (preBuffer.length > 12) preBuffer.shift();
                 }
@@ -58,14 +59,15 @@ async function startApp() {
             document.getElementById('mic-bar').style.width = Math.min(volume * 5, 100) + "%";
             document.getElementById('hz-val').innerText = Math.round(pitch) + " Hz";
 
-            let isSpeech = volume > 2.5 && pitch > 50; // Tundlik hääle tuvastus
+            // SÄTID: volume > 3 ja pitch > 50
+            let isSpeech = volume > 3 && pitch > 50; 
             
             if (isSpeech) {
                 speechMs += 50;
                 pitchHistory.push(pitch);
                 document.getElementById('status-light').style.background = "#22c55e"; // Roheline
                 
-                // Kui kõne algab, kleebime algusse puhvris olnud 1.2s vaikust
+                // KUI KÕNE ALGAB: Kleebime puhvri kohe algusesse
                 if (preBuffer.length > 0) {
                     chunks.push(...preBuffer);
                     preBuffer = [];
@@ -74,11 +76,12 @@ async function startApp() {
                 if (silenceTimeout) { clearTimeout(silenceTimeout); silenceTimeout = null; }
             } else {
                 silenceMs += 50;
-                // Kui tekib vaikus, ootame 1.2s enne kui salvestamise lõpetame
-                if (!silenceTimeout) {
-                    document.getElementById('status-light').style.background = "#334155"; // Hall
+                // Kui tekib vaikus, hoiame "lõpuakent" 1.2s avatuna
+                if (document.getElementById('status-light').style.background === "rgb(34, 197, 94)") {
+                    document.getElementById('status-light').style.background = "#334155"; // Halliks
                     silenceTimeout = setTimeout(() => {
                         silenceTimeout = null;
+                        console.log("Salvestamine peatatud (vaikus)");
                     }, 1200);
                 }
             }
@@ -86,20 +89,20 @@ async function startApp() {
             document.getElementById('v-val').innerText = Math.round(silenceMs/1000) + "s";
         };
 
-        mediaRecorder.start(100); // Küsime andmeid iga 0.1s järel
+        mediaRecorder.start(100); // 100ms tükid on üliolulised filtreerimiseks
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
         isLive = true;
     } catch (err) { alert("Viga seadmes."); }
 }
 
-// 4. SALVESTAMINE
+// 4. SALVESTAMINE (Nupud)
 function saveSegment(callback) {
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
         const endTime = new Date().toLocaleTimeString('et-EE');
         const note = document.getElementById('session-note').value.trim();
         
         mediaRecorder.onstop = () => {
-            if (chunks.length > 5) { // Salvestame ainult siis, kui on reaalselt heli (vähemalt 0.5s)
+            if (chunks.length > 0) {
                 let finalHz = pitchHistory.length > 0 ? Math.round(pitchHistory.reduce((a,b)=>a+b)/pitchHistory.length) : 0;
                 const blob = new Blob(chunks, { type: 'audio/webm' });
                 const reader = new FileReader();
@@ -112,13 +115,15 @@ function saveSegment(callback) {
                     });
                     tx.oncomplete = () => { renderHistory(); if(callback) callback(); };
                 };
-            } else if(callback) callback();
+            } else {
+                if(callback) callback();
+            }
         };
         mediaRecorder.stop();
     } else if (callback) callback();
 }
 
-// 5. NUPUD
+// 5. NUPUD JA EVENTID
 document.getElementById('startBtn').addEventListener('click', () => {
     document.getElementById('start-section').classList.add('hidden');
     document.getElementById('mic-section').classList.remove('hidden');
@@ -160,7 +165,7 @@ function renderHistory() {
             <div class="glass rounded-[30px] p-6 border border-white/5 mb-4 shadow-xl">
                 <div class="flex justify-between text-[10px] text-slate-500 font-bold mb-4 uppercase">
                     <span>${s.start} — ${s.end}</span>
-                    <button onclick="del(${s.id})" class="text-red-900/50 hover:text-red-500">Kustuta</button>
+                    <button onclick="del(${s.id})" class="text-red-900/50 hover:text-red-500 font-bold">Kustuta</button>
                 </div>
                 ${s.note ? `<div class="mb-4 p-4 bg-black/40 rounded-xl text-xs text-slate-300 italic border-l border-blue-500">${s.note}</div>` : ''}
                 <div class="flex items-center gap-4">
