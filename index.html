@@ -1,70 +1,151 @@
-<!DOCTYPE html>
-<html lang="et">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Peegel Uurija v16</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; }
-        .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
-        textarea::placeholder { color: #475569; }
-        .hidden-section { display: none; }
-    </style>
-</head>
-<body class="p-6 min-h-screen flex flex-col items-center">
+let isLive = false, speechMs = 0, silenceMs = 0, db, stream, mediaRecorder, wakeLock = null;
+let chunks = [], sessionStartTime = "", pitchHistory = [], silenceTimeout = null;
 
-    <div class="w-full max-w-md space-y-8">
-        <div class="flex justify-between items-center">
-            <h1 class="text-2xl font-bold tracking-tighter text-blue-500">PEEGEL</h1>
-            <div id="clock" class="text-3xl font-bold text-yellow-500 tracking-tighter">00:00:00</div>
-        </div>
+// 1. KELL
+setInterval(() => { 
+    const el = document.getElementById('clock');
+    if(el) el.innerText = new Date().toLocaleTimeString('et-EE'); 
+}, 1000);
 
-        <div id="mic-section" class="hidden space-y-6">
-            <div class="glass rounded-[40px] p-8 space-y-6">
-                <div class="flex justify-between items-center px-2">
-                    <div class="flex items-center gap-2">
-                        <div id="status-light" class="w-3 h-3 bg-slate-700 rounded-full"></div>
-                        <div class="w-40 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                            <div id="mic-bar" class="h-full bg-green-400 w-0 transition-all duration-75"></div>
-                        </div>
-                    </div>
-                    <div id="hz-val" class="text-xl font-bold text-blue-400">0 Hz</div>
+// 2. ANDMEBAAS
+const dbReq = indexedDB.open("Peegel_Final_DB", 1);
+dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("log", { keyPath: "id" }); };
+dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
+
+// 3. ANALÜÜS
+async function startApp() {
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+        if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const analyser = ctx.createAnalyser();
+        const processor = ctx.createScriptProcessor(2048, 1, 1);
+        ctx.createMediaStreamSource(stream).connect(analyser);
+        analyser.connect(processor); processor.connect(ctx.destination);
+        
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = e => { if(e.data.size > 0) chunks.push(e.data); };
+        
+        processor.onaudioprocess = () => {
+            if (!isLive) return;
+            const data = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(data);
+            const volume = data.reduce((a,b) => a+b) / data.length;
+            
+            let maxVal = -1, maxIdx = -1;
+            for (let i = 0; i < data.length/2; i++) { if (data[i] > maxVal) { maxVal = data[i]; maxIdx = i; } }
+            const pitch = maxIdx * (ctx.sampleRate/2) / (data.length/2);
+
+            document.getElementById('mic-bar').style.width = Math.min(volume * 5, 100) + "%";
+            document.getElementById('hz-val').innerText = Math.round(pitch) + " Hz";
+
+            let isSpeech = volume > 3 && pitch > 50 && pitch < 1500;
+            
+            if (isSpeech) {
+                speechMs += 50; pitchHistory.push(pitch);
+                document.getElementById('status-light').style.background = "#22c55e";
+                if (silenceTimeout) { clearTimeout(silenceTimeout); silenceTimeout = null; }
+                if (mediaRecorder.state === "inactive") mediaRecorder.start();
+                else if (mediaRecorder.state === "paused") mediaRecorder.resume();
+            } else {
+                silenceMs += 50;
+                document.getElementById('status-light').style.background = "#334155";
+                if (mediaRecorder.state === "recording" && !silenceTimeout) {
+                    silenceTimeout = setTimeout(() => {
+                        if (mediaRecorder.state === "recording") mediaRecorder.pause();
+                        silenceTimeout = null;
+                    }, 1500); 
+                }
+            }
+            document.getElementById('s-val').innerText = Math.round(speechMs/1000) + "s";
+            document.getElementById('v-val').innerText = Math.round(silenceMs/1000) + "s";
+        };
+        sessionStartTime = new Date().toLocaleTimeString('et-EE');
+        isLive = true;
+    } catch (err) { alert("Viga seadmes."); }
+}
+
+// 4. SALVESTAMINE
+function saveSegment(callback) {
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        const endTime = new Date().toLocaleTimeString('et-EE');
+        const note = document.getElementById('session-note').value.trim();
+        mediaRecorder.onstop = () => {
+            let finalHz = pitchHistory.length > 0 ? Math.round(pitchHistory.reduce((a,b)=>a+b)/pitchHistory.length) : 0;
+            const blob = new Blob(chunks, { type: 'audio/webm' });
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onloadend = () => {
+                const tx = db.transaction("log", "readwrite");
+                tx.objectStore("log").add({ id: Date.now(), start: sessionStartTime, end: endTime, audio: reader.result, avgHz: finalHz, note: note });
+                tx.oncomplete = () => { renderHistory(); if(callback) callback(); };
+            };
+        };
+        mediaRecorder.stop();
+    } else if (callback) callback();
+}
+
+// 5. NUPPUDE FUNKTSIOONID
+document.getElementById('startBtn').onclick = () => {
+    document.getElementById('start-section').classList.add('hidden');
+    document.getElementById('mic-section').classList.remove('hidden');
+    startApp();
+};
+
+document.getElementById('toggleHistoryBtn').onclick = () => {
+    const container = document.getElementById('history-container');
+    const btn = document.getElementById('toggleHistoryBtn');
+    if (container.classList.contains('hidden')) {
+        container.classList.remove('hidden');
+        btn.innerText = "Peida ajalugu";
+    } else {
+        container.classList.add('hidden');
+        btn.innerText = "Vaata ajalugu";
+    }
+};
+
+document.getElementById('fixBtn').onclick = () => {
+    saveSegment(() => {
+        chunks = []; speechMs = 0; silenceMs = 0; pitchHistory = [];
+        document.getElementById('session-note').value = "";
+        sessionStartTime = new Date().toLocaleTimeString('et-EE');
+    });
+};
+
+document.getElementById('stopBtn').onclick = () => {
+    if (confirm("Lõpeta?")) { isLive = false; if(wakeLock) wakeLock.release(); saveSegment(() => location.reload()); }
+};
+
+function renderHistory() {
+    if(!db) return;
+    const tx = db.transaction("log", "readonly");
+    tx.objectStore("log").getAll().onsuccess = e => {
+        const items = e.target.result.sort((a,b) => b.id - a.id);
+        document.getElementById('history-list').innerHTML = items.map(s => `
+            <div class="glass rounded-[30px] p-6 border border-white/5">
+                <div class="flex justify-between text-[10px] text-slate-500 font-bold mb-4">
+                    <span>${s.start} — ${s.end}</span>
+                    <button onclick="del(${s.id})">🗑️</button>
                 </div>
-
-                <div class="grid grid-cols-2 gap-4 pt-4 border-t border-white/5 text-center">
-                    <div><p class="text-[9px] text-slate-500 uppercase mb-1">Kõne aeg</p><span id="s-val" class="text-xl font-bold text-green-400">0s</span></div>
-                    <div><p class="text-[9px] text-slate-500 uppercase mb-1">Vaikuse aeg</p><span id="v-val" class="text-xl font-bold">0s</span></div>
+                <div class="flex gap-2 mb-4">
+                    <button onclick="fullDownload(${s.id})" class="flex-1 bg-blue-600/10 text-blue-400 py-3 rounded-2xl text-[10px] font-bold uppercase">Download</button>
+                    ${s.note ? `<button onclick="this.nextElementSibling.classList.toggle('hidden')" class="flex-1 bg-white/5 text-slate-400 py-3 rounded-2xl text-[10px] font-bold uppercase">Märge</button>
+                    <div class="hidden mt-4 p-4 bg-black/40 rounded-xl text-xs text-slate-300 w-full italic">${s.note}</div>` : ''}
                 </div>
-            </div>
+                <audio controls src="${s.audio}" class="w-full h-8 opacity-60"></audio>
+            </div>`).join('');
+    };
+}
 
-            <div class="glass rounded-[30px] p-6 space-y-3">
-                <p class="text-[10px] text-slate-500 uppercase font-bold tracking-widest px-2 text-center">Lisa tähelepanek</p>
-                <textarea id="session-note" class="w-full bg-black/30 rounded-2xl p-4 text-sm text-slate-300 border border-white/5 focus:outline-none focus:border-blue-500/50 transition-all" placeholder="..." rows="2"></textarea>
-            </div>
+window.del = id => { if(confirm("Kustuta?")) { const tx = db.transaction("log", "readwrite"); tx.objectStore("log").delete(id); tx.oncomplete = renderHistory; } };
 
-            <div class="grid grid-cols-2 gap-4">
-                <button id="fixBtn" class="bg-blue-600 text-white py-5 rounded-[25px] font-black uppercase tracking-widest active:scale-95 transition-all text-sm">Fikseeri</button>
-                <button id="stopBtn" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-black uppercase tracking-widest active:scale-95 transition-all text-sm">Lõpeta</button>
-            </div>
-        </div>
-
-        <div id="start-section" class="flex flex-col items-center justify-center pt-20">
-            <button id="startBtn" class="bg-blue-600 text-white px-16 py-8 rounded-[40px] font-black uppercase tracking-widest shadow-2xl shadow-blue-900/40 active:scale-95 transition-all text-xl">
-                Alusta Analüüsi
-            </button>
-        </div>
-
-        <div class="pt-10 flex flex-col items-center">
-            <button id="toggleHistoryBtn" class="text-[10px] text-slate-500 font-bold uppercase tracking-[0.3em] border border-white/10 px-6 py-2 rounded-full hover:bg-white/5 transition-all">
-                Vaata ajalugu
-            </button>
-            <div id="history-container" class="hidden-section w-full mt-8 space-y-6 pb-20">
-                <div id="history-list"></div>
-            </div>
-        </div>
-    </div>
-
-    <script src="script.js"></script>
-</body>
-</html>
+window.fullDownload = id => {
+    const tx = db.transaction("log", "readonly");
+    tx.objectStore("log").get(id).onsuccess = e => {
+        const d = e.target.result;
+        const html = `<html><body style="background:#020617;color:white;padding:40px;font-family:sans-serif;"><h2>${d.start}</h2><p>${d.note || ''}</p><audio controls src="${d.audio}"></audio></body></html>`;
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([html], {type:'text/html'}));
+        a.download = `Sessioon_${d.id}.html`; a.click();
+    };
+};
