@@ -19,7 +19,7 @@ setInterval(() => {
     if(c) c.innerText = new Date().toLocaleTimeString('et-EE'); 
 }, 1000);
 
-// Kasutame v61 andmebaasi edasi, andmed jäävad alles
+// Andmebaas jääb samaks (v61), et vanad failid ei kaoks
 const dbReq = indexedDB.open("Peegel_DataCapsule_V61", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
@@ -54,13 +54,15 @@ async function startSession() {
                 document.getElementById('hz-min-val').innerText = hzMin;
                 document.getElementById('hz-max-val').innerText = hzMax;
             }
+            
+            // Siin otsustame, kas on kõne või vaikus
             if (vol > VOLUME_THRESHOLD && hz > MIN_HZ) {
                 speechMs += (4096 / audioCtx.sampleRate) * 1000;
-                document.getElementById('status-light').style.background = "#22c55e";
+                document.getElementById('status-light').style.background = "#22c55e"; // Roheline
                 speechBuffer.push(new Float32Array(inputData));
             } else {
                 silenceMs += (4096 / audioCtx.sampleRate) * 1000;
-                document.getElementById('status-light').style.background = "#334155";
+                document.getElementById('status-light').style.background = "#334155"; // Hall
             }
             document.getElementById('speech-sec').innerText = formatTime(speechMs);
             document.getElementById('silence-sec').innerText = formatTime(silenceMs);
@@ -78,19 +80,38 @@ async function stopAndSave() {
     document.getElementById('stop-btn').innerText = "SALVESTAN...";
     isLive = false;
     clearInterval(autoFixTimer);
-    if (speechBuffer.length > 0) await fixSession();
+    
+    // Proovime salvestada viimast juppi
+    await fixSession();
+    
     if (stream) stream.getTracks().forEach(t => t.stop());
     location.reload();
 }
 
 function fixSession() {
     return new Promise((resolve) => {
-        if (!isLive && speechBuffer.length === 0) return resolve();
+        // --- UUS KONTROLL v64 ---
+        // Kui kõne pikkus (speechMs) on 0 või puhver tühi, siis ÄRA SALVESTA.
+        // Lihtsalt puhastame muutujad ja lahkume.
+        if (speechMs === 0 || speechBuffer.length === 0) {
+            speechBuffer = [];
+            speechMs = 0;
+            silenceMs = 0;
+            hzMin = Infinity; 
+            hzMax = 0;
+            // Kui kasutaja kirjutas märkme aga ei rääkinud, tühjendame ka selle, 
+            // sest pole heli, millega seda siduda.
+            document.getElementById('note-input').value = ""; 
+            return resolve(); // Lahkume siit funktsioonist kohe
+        }
+        // -------------------------
+
         const snapNote = document.getElementById('note-input').value;
         const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
         const snapStats = { min: hzMin, max: hzMax, s: speechMs, v: silenceMs };
         const currentSpeech = [...speechBuffer], currentSR = audioCtx.sampleRate;
         
+        // Nullime loendurid järgmise tsükli jaoks
         speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
         document.getElementById('note-input').value = "";
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
@@ -133,7 +154,6 @@ function bufferToWav(chunks, sampleRate) {
 
 function toB64(b) { return new Promise(r => { const f = new FileReader(); f.onloadend = () => r(f.result); f.readAsDataURL(b); }); }
 
-// ALLALAADIMINE 1: HTML KAPSEL
 function downloadCapsule(id) {
     const tx = db.transaction("sessions", "readonly");
     tx.objectStore("sessions").get(id).onsuccess = (e) => {
@@ -179,7 +199,6 @@ function downloadCapsule(id) {
             </div>
         </body>
         </html>`;
-        
         const blob = new Blob([htmlContent], { type: 'text/html' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
@@ -188,7 +207,7 @@ function downloadCapsule(id) {
     };
 }
 
-// ALLALAADIMINE 2: PUHAS WAV
+// WAV faili allalaadimine
 function downloadRawWav(audioData, id) {
     const link = document.createElement('a');
     link.href = audioData;
@@ -198,19 +217,16 @@ function downloadRawWav(audioData, id) {
     document.body.removeChild(link);
 }
 
-// LOGI RENDERDAMINE - 2 NUPPU
 function renderHistory() {
     if(!db) return;
     const tx = db.transaction("sessions", "readonly");
     tx.objectStore("sessions").getAll().onsuccess = e => {
         const list = e.target.result.sort((a,b) => b.id - a.id);
-        
         const html = list.map(s => {
             const noteHtml = s.note && s.note.trim() !== "" ? 
                 `<button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-2 text-[10px] font-black uppercase bg-blue-500/10 rounded-xl hover:bg-blue-500/20 transition-all" style="color: #3b82f6;">Kuva Märge</button>
                  <div class="hidden p-4 bg-black/40 rounded-xl text-xs italic text-slate-300 border-l-2 border-blue-500 mt-2 whitespace-pre-wrap">${s.note}</div>` 
                 : '';
-                
             return `
             <div class="glass rounded-[30px] p-5 mb-4 text-left">
                 <div class="flex justify-between items-center text-[11px] uppercase font-bold mb-3">
@@ -224,19 +240,16 @@ function renderHistory() {
                 <div class="p-4 bg-blue-500/5 rounded-2xl border border-blue-500/10 mb-3">
                     <div class="flex justify-between items-center text-[9px] font-black text-blue-400 uppercase mb-2">
                         <span>Pikkus: ${formatTime(s.sMs)}</span>
-                        
                         <div class="flex gap-2">
                             <button onclick="downloadCapsule(${s.id})" class="text-white bg-blue-600 border-0 px-2 py-1 rounded shadow text-[9px] active:scale-95">HTML</button>
                             <button onclick="downloadRawWav('${s.audioClean}', '${s.id}')" class="text-white bg-slate-600 border-0 px-2 py-1 rounded shadow text-[9px] active:scale-95">WAV</button>
                         </div>
-
                     </div>
                     <audio src="${s.audioClean}" controls preload="metadata"></audio>
                 </div>
                 ${noteHtml}
             </div>`;
         }).join('');
-        
         document.getElementById('history-container').innerHTML = html;
     };
 }
