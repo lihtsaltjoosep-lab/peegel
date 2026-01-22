@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Peegel Pro v52</title>
+    <title>Peegel Pro v53</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -15,11 +15,10 @@
         
         #clock { color: #f59e0b; font-weight: 300; }
         
-        /* Logi tekstid: Paksemad ja täpsed värvid */
+        /* Logi stiilid */
         .text-log-time { color: #22c55e; font-weight: 700; }     
-        .text-hz-low { color: #3b82f6; font-weight: 700; }       /* Madal arv - Sinine */
-        .text-hz-high { color: #ef4444; font-weight: 700; }      /* Kõrge arv - Punane */
-        .text-hz-label { color: #3b82f6; font-weight: 700; }     /* HZ - Sinine */
+        .text-hz-low { color: #3b82f6; font-weight: 700; }       
+        .text-hz-high { color: #ef4444; font-weight: 700; }      
         .text-log-silence { color: #f59e0b; font-weight: 700; }  
         .text-divider { color: #334155; }
         .btn-delete-dark { color: #991b1b; font-weight: 800; font-size: 10px; }
@@ -47,13 +46,15 @@
                             <span class="text-blue-400">P:<span id="silence-sec">0s</span></span>
                         </div>
                     </div>
-                    <div class="flex gap-4 font-mono text-[12px] uppercase font-bold">
-                        <span class="text-blue-500">Min:<span id="hz-min-val">0</span></span>
-                        <span class="text-red-500">Max:<span id="hz-max-val">0</span></span>
+                    <div class="flex gap-2 font-mono text-[12px] uppercase font-bold">
+                        <span class="text-blue-500">Hz <span id="hz-min-val">0</span></span>
+                        <span class="text-red-500"><span id="hz-max-val">0</span></span>
                     </div>
                 </div>
+
                 <textarea id="note-input" class="w-full bg-transparent text-sm text-slate-200 focus:outline-none placeholder-slate-800 resize-none font-medium h-32 pt-2" placeholder="Kirjuta märkmed siia..." rows="5"></textarea>
             </div>
+
             <div class="grid grid-cols-2 gap-3">
                 <button onclick="fixSession()" class="bg-blue-600 text-white py-5 rounded-[25px] font-black uppercase text-xs tracking-widest active:scale-95 shadow-lg">Fikseeri</button>
                 <button onclick="location.reload()" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-black uppercase text-xs active:scale-95">Lõpeta</button>
