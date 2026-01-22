@@ -3,24 +3,21 @@ let chunks = [], speechMap = [], pitchHistory = [];
 let sessionStartTime = "", autoFixInterval;
 let hzMin = Infinity, hzMax = 0;
 
-// KELL
 setInterval(() => { 
     const clock = document.getElementById('clock');
     if(clock) clock.innerText = new Date().toLocaleTimeString('et-EE'); 
 }, 1000);
 
-// ANDMEBAAS
-const dbReq = indexedDB.open("Peegel_V28_Final", 1);
+const dbReq = indexedDB.open("Peegel_V29_DB", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
-// START
 document.getElementById('start-btn').onclick = async () => {
     document.getElementById('setup-screen').classList.add('hidden');
     document.getElementById('active-session').classList.remove('hidden');
     
     try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false } });
         if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
         
         const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -30,8 +27,7 @@ document.getElementById('start-btn').onclick = async () => {
         ctx.createMediaStreamSource(stream).connect(analyser).connect(processor);
         processor.connect(ctx.destination);
 
-        // Kasutame tihedat salvestust, et lõiked oleksid täpsed
-        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+        mediaRecorder = new MediaRecorder(stream);
         mediaRecorder.ondataavailable = e => { 
             if (e.data.size > 0 && isLive) {
                 chunks.push({ blob: e.data, t: Date.now() }); 
@@ -56,22 +52,22 @@ document.getElementById('start-btn').onclick = async () => {
             }
 
             const t = Date.now();
-            // LÄVI: vol > 2.5 on hääl
-            const isSpeechNow = vol > 2.5 && hz > 50;
-            if (isSpeechNow) {
+            const isSpeaking = vol > 2.5 && hz > 50;
+            
+            if (isSpeaking) {
                 speechMs += 50;
                 document.getElementById('status-light').style.background = "#22c55e";
+                speechMap.push({ t: t, s: true });
             } else {
                 silenceMs += 50;
                 document.getElementById('status-light').style.background = "#334155";
+                speechMap.push({ t: t, s: false });
             }
-            
-            speechMap.push({ t: t, s: isSpeechNow });
             document.getElementById('speech-sec').innerText = Math.round(speechMs/1000) + "s";
             document.getElementById('silence-sec').innerText = Math.round(silenceMs/1000) + "s";
         };
 
-        mediaRecorder.start(100); // 100ms on vajalik täpseks lõikamiseks
+        mediaRecorder.start(100); // 100ms on kriitiline täpsuse jaoks
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
         isLive = true;
         autoFixInterval = setInterval(() => fixSession(), 600000); 
@@ -89,29 +85,23 @@ async function fixSession(callback) {
     const snapMap = [...speechMap];
 
     mediaRecorder.onstop = async () => {
-        // Alustame kohe uue sessiooniga
+        // RESET
         chunks = []; speechMap = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
         document.getElementById('note-input').value = "";
         if (isLive) mediaRecorder.start(100);
 
-        // --- LÕIKAMISE PARANDUS ---
-        // Filtreerime välja ainult need jupid, mis on kõnele lähedal (1s aken)
+        // --- LÕIKAMINE ---
+        // Puhas fail: ainult jupid, kus tuvastati kõne + 0.8s puhver
         const cleanBlobs = snapChunks.filter(c => {
-            return snapMap.some(m => m.s && Math.abs(m.t - c.t) < 1000);
+            return snapMap.some(m => m.s && Math.abs(m.t - c.t) < 800);
         }).map(c => c.blob);
 
         const fullBlob = new Blob(snapChunks.map(c => c.blob), { type: 'audio/webm' });
-        
-        // Kui "Puhas" on tühi, salvestame nulli
-        let cleanBase = null;
-        if (cleanBlobs.length > 0) {
-            // Lisame esimese jupi faili päise säilitamiseks
-            const cleanBlob = new Blob([snapChunks[0].blob, ...cleanBlobs], { type: 'audio/webm' });
-            cleanBase = await toB64(cleanBlob);
-        }
+        const cleanBlob = cleanBlobs.length > 0 ? new Blob([snapChunks[0].blob, ...cleanBlobs], { type: 'audio/webm' }) : null;
 
         const fullBase = await toB64(fullBlob);
+        const cleanBase = cleanBlob ? await toB64(cleanBlob) : null;
 
         const tx = db.transaction("sessions", "readwrite");
         tx.objectStore("sessions").add({
@@ -126,10 +116,8 @@ async function fixSession(callback) {
             s: Math.round(snapStats.s/1000), 
             v: Math.round(snapStats.v/1000)
         });
-
         tx.oncomplete = () => { renderHistory(); if (callback) callback(); };
     };
-    
     mediaRecorder.stop();
 }
 
@@ -142,9 +130,9 @@ function renderHistory() {
         const list = e.target.result.sort((a,b) => b.id - a.id);
         document.getElementById('history-container').innerHTML = list.map(s => `
             <div class="glass rounded-[30px] p-5 space-y-4 shadow-xl border border-white/5">
-                <div class="flex justify-between text-[10px] font-bold uppercase leading-tight">
-                    <span class="text-yellow-500">${s.start}-${s.end} | <span class="hz-accent">${s.hzMin}-${s.hzMax} Hz</span></span>
-                    <button onclick="delS(${s.id})" class="text-red-900 font-bold uppercase opacity-50">Kustuta</button>
+                <div class="flex justify-between text-[10px] font-bold uppercase">
+                    <span class="text-yellow-500">${s.start}-${s.end} | <span class="hz-accent">${s.hzMin}-${s.hzMax} Hz</span> | <span class="text-slate-500">V: ${s.v}s</span></span>
+                    <button onclick="delS(${s.id})" class="text-red-900 font-bold opacity-40">Kustuta</button>
                 </div>
                 
                 <div class="p-4 bg-green-500/5 rounded-2xl space-y-2 border border-green-500/10">
@@ -156,7 +144,7 @@ function renderHistory() {
                 </div>
 
                 <div class="opacity-10 p-2 space-y-1">
-                    <p class="text-[8px] uppercase font-bold text-slate-400">Toores puhver (+Vaikus ${s.v}s)</p>
+                    <p class="text-[8px] uppercase font-bold text-slate-400">Toores puhver (Täispikkus)</p>
                     <audio src="${s.audioFull}" controls preload="metadata"></audio>
                 </div>
 
