@@ -3,18 +3,15 @@ let chunks = [], speechMap = [], pitchHistory = [];
 let sessionStartTime = "", autoFixInterval;
 let hzMin = Infinity, hzMax = 0;
 
-// KELL
 setInterval(() => { 
     const clock = document.getElementById('clock');
     if(clock) clock.innerText = new Date().toLocaleTimeString('et-EE'); 
 }, 1000);
 
-// ANDMEBAAS
-const dbReq = indexedDB.open("Peegel_V23_Final", 1);
+const dbReq = indexedDB.open("Peegel_V24_DB", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
-// START
 document.getElementById('start-btn').onclick = async () => {
     document.getElementById('setup-screen').classList.add('hidden');
     document.getElementById('active-session').classList.remove('hidden');
@@ -35,9 +32,8 @@ document.getElementById('start-btn').onclick = async () => {
 
         mediaRecorder = new MediaRecorder(stream);
         
-        // Kogume andmeid
         mediaRecorder.ondataavailable = e => { 
-            if (e.data.size > 0) { 
+            if (e.data.size > 0 && isLive) { 
                 chunks.push({ blob: e.data, t: Date.now() }); 
             } 
         };
@@ -60,8 +56,7 @@ document.getElementById('start-btn').onclick = async () => {
             }
 
             const t = Date.now();
-            // TUNDLIKKUS: vol > 2.0 on juba sosin
-            if (vol > 2.0 && hz > 50) { 
+            if (vol > 2.2 && hz > 50) { 
                 speechMs += 50;
                 document.getElementById('status-light').style.background = "#22c55e";
                 speechMap.push({ t: t, s: true });
@@ -74,7 +69,7 @@ document.getElementById('start-btn').onclick = async () => {
             document.getElementById('silence-sec').innerText = Math.round(silenceMs/1000) + "s";
         };
 
-        mediaRecorder.start(200); // Suurem intervall stabiilsuse jaoks
+        mediaRecorder.start(200); 
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
         isLive = true;
         autoFixInterval = setInterval(() => fixSession(), 600000); 
@@ -84,7 +79,6 @@ document.getElementById('start-btn').onclick = async () => {
 async function fixSession(callback) {
     if (!mediaRecorder || mediaRecorder.state === "inactive") return;
     
-    // Võtame andmetest koopia enne stop-imist
     const snapNote = document.getElementById('note-input').value;
     const snapStart = sessionStartTime;
     const snapEnd = new Date().toLocaleTimeString('et-EE');
@@ -93,23 +87,26 @@ async function fixSession(callback) {
     const snapMap = [...speechMap];
 
     mediaRecorder.onstop = async () => {
-        // RESET reaalaja andmetele kohe
         chunks = []; speechMap = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
         document.getElementById('note-input').value = "";
         if (isLive) mediaRecorder.start(200);
 
-        // TÖÖTLEMINE: Filtreerime välja ainult vestlusega tükid
-        // Kasutame 1.5 sekundilist "akent", et jutt ei hakkiks
+        // FILTREERIMISE PARANDUS: Tagame, et "Puhas" failil on korrektne struktuur
+        // Kasutame laiemat puhvrit (2 sekundit), et vältida liigset hakkimist
         const cleanBlobs = snapChunks.filter(c => {
-            return snapMap.some(m => m.s && Math.abs(m.t - c.t) < 1500);
+            return snapMap.some(m => m.s && Math.abs(m.t - c.t) < 2000);
         }).map(c => c.blob);
 
-        const fullBlob = new Blob(snapChunks.map(c => c.blob), { type: 'audio/webm' });
-        const cleanBlob = new Blob(cleanBlobs, { type: 'audio/webm' });
+        // Kui "Puhas" osa on liiga väike, siis me ei loo seda (vältimaks vigaseid faile)
+        let cleanBase = null;
+        if (cleanBlobs.length > 0) {
+            const cleanBlob = new Blob(cleanBlobs, { type: 'audio/webm' });
+            cleanBase = await toB64(cleanBlob);
+        }
 
+        const fullBlob = new Blob(snapChunks.map(c => c.blob), { type: 'audio/webm' });
         const fullBase = await toB64(fullBlob);
-        const cleanBase = await toB64(cleanBlob);
 
         const tx = db.transaction("sessions", "readwrite");
         tx.objectStore("sessions").add({
@@ -125,10 +122,7 @@ async function fixSession(callback) {
             v: Math.round(snapStats.v/1000)
         });
 
-        tx.oncomplete = () => {
-            renderHistory();
-            if (callback) callback();
-        };
+        tx.oncomplete = () => { renderHistory(); if (callback) callback(); };
     };
     
     mediaRecorder.stop();
@@ -145,18 +139,21 @@ function renderHistory() {
             <div class="glass rounded-[30px] p-5 space-y-4 shadow-xl border border-white/5">
                 <div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase">
                     <span>${s.start}-${s.end} | ${s.hzMin}-${s.hzMax}Hz</span>
-                    <button onclick="delS(${s.id})" class="text-red-900 font-bold uppercase">Kustuta</button>
+                    <button onclick="delS(${s.id})" class="text-red-900 font-bold uppercase opacity-50">Kustuta</button>
                 </div>
+                
                 <div class="p-4 bg-green-500/5 rounded-2xl space-y-2 border border-green-500/10">
                     <p class="text-[9px] font-black text-green-400 uppercase tracking-widest">Puhas vestlus (${s.s}s)</p>
-                    <audio src="${s.audioClean}" controls preload="auto"></audio>
+                    ${s.audioClean ? `<audio src="${s.audioClean}" controls preload="metadata"></audio>` : '<p class="text-[8px] text-slate-600">Heli ei tuvastatud</p>'}
                 </div>
+
                 <div class="opacity-30 p-2 space-y-1">
                     <p class="text-[8px] uppercase font-bold text-slate-400">Toores (+Vaikus ${s.v}s)</p>
-                    <audio src="${s.audioFull}" controls preload="auto"></audio>
+                    <audio src="${s.audioFull}" controls preload="metadata"></audio>
                 </div>
-                <button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-2 text-[9px] font-black uppercase text-slate-500 bg-white/5 rounded-xl">Märge</button>
-                <div class="hidden p-4 bg-black/40 rounded-2xl text-xs italic text-slate-300 border-l-2 border-blue-600">${s.note || '...'}</div>
+
+                <button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-3 text-[10px] font-black uppercase text-yellow-500 bg-yellow-500/10 rounded-2xl shadow-sm">Kuva Märge</button>
+                <div class="hidden p-4 bg-black/40 rounded-2xl text-xs italic text-slate-300 border-l-2 border-yellow-500">${s.note || '...'}</div>
             </div>`).join('');
     };
 }
