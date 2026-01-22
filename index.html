@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Peegel v16.1</title>
+    <title>Peegel v16.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; overflow-x: hidden; }
+        body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; }
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
         .hidden { display: none !important; }
     </style>
@@ -15,7 +15,7 @@
 
     <div class="w-full max-w-md space-y-6">
         <div class="flex justify-between items-center mb-4">
-            <h1 class="text-xl font-bold tracking-tighter text-blue-500 uppercase">Peegel</h1>
+            <h1 class="text-xl font-bold tracking-tighter text-blue-500 uppercase italic">Peegel</h1>
             <div id="clock" class="text-2xl font-bold text-yellow-500 tracking-tighter">00:00:00</div>
         </div>
 
@@ -28,7 +28,7 @@
                             <div id="mic-bar" class="h-full bg-green-400 w-0 transition-all duration-75"></div>
                         </div>
                     </div>
-                    <div id="hz-val" class="text-xl font-bold text-blue-400">0 Hz</div>
+                    <div id="hz-val" class="text-xl font-bold text-blue-400 italic">0 Hz</div>
                 </div>
                 <div class="grid grid-cols-2 gap-4 text-center border-t border-white/5 pt-4">
                     <div><p class="text-[9px] text-slate-500 uppercase">Kõne</p><span id="s-val" class="text-lg font-bold text-green-400">0s</span></div>
@@ -37,7 +37,7 @@
             </div>
 
             <div class="glass rounded-[30px] p-6 space-y-3">
-                <textarea id="session-note" class="w-full bg-black/30 rounded-2xl p-4 text-sm text-slate-300 border border-white/5 focus:outline-none" placeholder="Kirjuta märge siia..." rows="2"></textarea>
+                <textarea id="session-note" class="w-full bg-black/30 rounded-2xl p-4 text-sm text-slate-300 border border-white/5 focus:outline-none placeholder-slate-700" placeholder="Kirjuta märge..." rows="2"></textarea>
             </div>
 
             <div class="grid grid-cols-2 gap-4">
@@ -50,14 +50,16 @@
             <button id="startBtn" class="bg-blue-600 text-white px-16 py-8 rounded-[40px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all text-xl">
                 Alusta
             </button>
-            
             <button id="toggleHistoryBtn" class="mt-4 text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] border border-white/10 px-8 py-3 rounded-full hover:bg-white/5 active:scale-95 transition-all">
                 Vaata ajalugu
             </button>
         </div>
 
-        <div id="history-container" class="hidden w-full space-y-4 pb-20">
+        <div id="history-container" class="hidden w-full space-y-6 pb-20">
             <div id="history-list" class="space-y-4"></div>
+            <button id="closeHistoryBtn" class="w-full text-[10px] text-slate-600 font-bold uppercase tracking-[0.2em] py-4 border-t border-white/5 active:opacity-50">
+                ↑ Sulge ajalugu
+            </button>
         </div>
     </div>
 
