@@ -1,15 +1,18 @@
 const VOLUME_THRESHOLD = 3.8; 
 const MIN_HZ = 80;            
+const AUTO_FIX_MS = 600000; // 10 minutit (10 * 60 * 1000)
 
 let isLive = false, speechMs = 0, silenceMs = 0, db, stream = null;
 let audioCtx = null, processor = null, source = null, speechBuffer = [];
 let hzMin = Infinity, hzMax = 0, sessionStartTime = "";
+let autoFixTimer = null;
 
+// ABI: Vormindame alati minutid ja sekundid (nt 0m 5s)
 function formatTime(ms) {
     const totalSeconds = Math.round(ms / 1000);
     const m = Math.floor(totalSeconds / 60);
     const s = totalSeconds % 60;
-    return m > 0 ? `${m}m ${s}s` : `${s}s`;
+    return `${m}m ${s}s`;
 }
 
 setInterval(() => { 
@@ -61,11 +64,24 @@ async function startSession() {
             document.getElementById('speech-sec').innerText = formatTime(speechMs);
             document.getElementById('silence-sec').innerText = formatTime(silenceMs);
         };
+
         document.getElementById('setup-screen').classList.add('hidden');
         document.getElementById('active-session').classList.remove('hidden');
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
         isLive = true;
+
+        // Käivitame 10-minuti automaatse salvestamise taimeri
+        autoFixTimer = setInterval(fixSession, AUTO_FIX_MS);
+
     } catch (err) { alert("Viga mikkriga!"); }
+}
+
+// UUS: Funktsioon lõpetamiseks nii, et andmed salvestatakse
+async function stopAndSave() {
+    if (speechBuffer.length > 0) {
+        await fixSession();
+    }
+    location.reload();
 }
 
 async function fixSession() {
@@ -74,9 +90,14 @@ async function fixSession() {
     const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
     const snapStats = { min: hzMin, max: hzMax, s: speechMs, v: silenceMs };
     const currentSpeech = [...speechBuffer], currentSR = audioCtx.sampleRate;
+    
+    // Reset andmed uue lõigu jaoks
     speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
-    document.getElementById('note-input').value = "";
     sessionStartTime = new Date().toLocaleTimeString('et-EE');
+    // Tekstivälja puhastame ainult siis, kui tegu pole 10-minuti automaatikaga
+    // Aga sinu soovil - puhastame alati, et uus märgistus algaks
+    document.getElementById('note-input').value = "";
+
     const cleanWav = bufferToWav(currentSpeech, currentSR);
     const cleanBase = await toB64(cleanWav);
     const tx = db.transaction("sessions", "readwrite");
@@ -118,9 +139,7 @@ function renderHistory() {
     tx.objectStore("sessions").getAll().onsuccess = e => {
         const list = e.target.result.sort((a,b) => b.id - a.id);
         document.getElementById('history-container').innerHTML = list.map(s => {
-            // Puhastame märkme failinime jaoks (lubame ainult tähti/numbreid)
-            const notePreview = s.note ? s.note.substring(0, 15).replace(/[^a-z0-9]/gi, '_') : s.id;
-            
+            const notePreview = s.note ? s.note.substring(0, 15).replace(/[^a-z0-9]/gi, '_') : 'Sessioon_' + s.id;
             return `
             <div class="glass rounded-[30px] p-5 space-y-4 shadow-xl border border-white/5 text-left">
                 <div class="flex justify-between items-center text-[11px] uppercase tracking-tight">
@@ -133,7 +152,6 @@ function renderHistory() {
                     </span>
                     <button onclick="delS(${s.id})" style="color: #991b1b; font-weight: 800; font-size: 10px;">KUSTUTA</button>
                 </div>
-                
                 <div class="p-4 bg-blue-500/5 rounded-2xl space-y-3 border border-blue-500/10">
                     <div class="flex justify-between items-center text-[9px] font-black text-blue-400 uppercase tracking-widest">
                         <span>Puhas vestlus (${formatTime(s.sMs)})</span>
@@ -141,7 +159,6 @@ function renderHistory() {
                     </div>
                     <audio src="${s.audioClean}" controls preload="metadata"></audio>
                 </div>
-
                 ${s.note && s.note.trim() !== "" ? `
                 <button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-3 text-[10px] font-black uppercase bg-blue-500/10 rounded-2xl" style="color: #3b82f6;">Kuva Märge</button>
                 <div class="hidden p-4 bg-black/40 rounded-2xl text-xs italic text-slate-300 border-l-2 border-blue-500">${s.note}</div>
@@ -152,10 +169,13 @@ function renderHistory() {
 }
 
 window.dl = (d, n) => { 
-    const a = document.createElement('a'); 
-    a.href = d; 
-    a.download = `${n}.wav`; 
-    a.click(); 
+    const a = document.createElement('a'); a.href = d; a.download = `${n}.wav`; a.click(); 
 };
 
-window.delS = id => { if(confirm("Kustuta?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id); tx.oncomplete = renderHistory; } };
+window.delS = id => { 
+    if(confirm("Kustuta?")) { 
+        const tx = db.transaction("sessions", "readwrite"); 
+        tx.objectStore("sessions").delete(id); 
+        tx.oncomplete = renderHistory; 
+    } 
+};
