@@ -44,18 +44,29 @@ async function startApp() {
             
             if (isSpeech) {
                 speechMs += 50; pitchHistory.push(pitch);
-                document.getElementById('status-light').style.background = "#22c55e";
+                document.getElementById('status-light').style.background = "#22c55e"; // Roheline
+                
+                // Kui tuvastame kõne, tühistame lõpetamise taimeri
                 if (silenceTimeout) { clearTimeout(silenceTimeout); silenceTimeout = null; }
-                if (mediaRecorder.state === "inactive") mediaRecorder.start();
-                else if (mediaRecorder.state === "paused") mediaRecorder.resume();
+                
+                // Käivitame/jätkame salvestamist
+                if (mediaRecorder.state === "inactive") {
+                    mediaRecorder.start(100); // Väikesed tükid, et puhver oleks värske
+                } else if (mediaRecorder.state === "paused") {
+                    mediaRecorder.resume();
+                }
             } else {
                 silenceMs += 50;
-                document.getElementById('status-light').style.background = "#334155";
+                document.getElementById('status-light').style.background = "#334155"; // Hall
+                
+                // LÕIKAMISE VIIVITUS: 1.2 sekundit (1200 ms)
                 if (mediaRecorder.state === "recording" && !silenceTimeout) {
                     silenceTimeout = setTimeout(() => {
-                        if (mediaRecorder.state === "recording") mediaRecorder.pause();
+                        if (mediaRecorder.state === "recording") {
+                            mediaRecorder.pause();
+                        }
                         silenceTimeout = null;
-                    }, 1500); 
+                    }, 1200); 
                 }
             }
             document.getElementById('s-val').innerText = Math.round(speechMs/1000) + "s";
@@ -86,24 +97,27 @@ function saveSegment(callback) {
     } else if (callback) callback();
 }
 
-// 5. NUPPUDE FUNKTSIOONID
+// 5. NUPUD
 document.getElementById('startBtn').onclick = () => {
     document.getElementById('start-section').classList.add('hidden');
     document.getElementById('mic-section').classList.remove('hidden');
     startApp();
 };
 
-document.getElementById('toggleHistoryBtn').onclick = () => {
+const toggleHistory = () => {
     const container = document.getElementById('history-container');
-    const btn = document.getElementById('toggleHistoryBtn');
+    const startSection = document.getElementById('start-section');
     if (container.classList.contains('hidden')) {
         container.classList.remove('hidden');
-        btn.innerText = "Peida ajalugu";
+        startSection.classList.add('hidden');
     } else {
         container.classList.add('hidden');
-        btn.innerText = "Vaata ajalugu";
+        if (!isLive) startSection.classList.remove('hidden');
     }
 };
+
+document.getElementById('toggleHistoryBtn').onclick = toggleHistory;
+document.getElementById('closeHistoryBtn').onclick = toggleHistory;
 
 document.getElementById('fixBtn').onclick = () => {
     saveSegment(() => {
@@ -129,8 +143,8 @@ function renderHistory() {
                     <button onclick="del(${s.id})">🗑️</button>
                 </div>
                 <div class="flex gap-2 mb-4">
-                    <button onclick="fullDownload(${s.id})" class="flex-1 bg-blue-600/10 text-blue-400 py-3 rounded-2xl text-[10px] font-bold uppercase">Download</button>
-                    ${s.note ? `<button onclick="this.nextElementSibling.classList.toggle('hidden')" class="flex-1 bg-white/5 text-slate-400 py-3 rounded-2xl text-[10px] font-bold uppercase">Märge</button>
+                    <button onclick="fullDownload(${s.id})" class="flex-1 bg-blue-600/10 text-blue-400 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest">Download</button>
+                    ${s.note ? `<button onclick="this.nextElementSibling.classList.toggle('hidden')" class="flex-1 bg-white/5 text-slate-400 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest">Märge</button>
                     <div class="hidden mt-4 p-4 bg-black/40 rounded-xl text-xs text-slate-300 w-full italic">${s.note}</div>` : ''}
                 </div>
                 <audio controls src="${s.audio}" class="w-full h-8 opacity-60"></audio>
@@ -144,7 +158,7 @@ window.fullDownload = id => {
     const tx = db.transaction("log", "readonly");
     tx.objectStore("log").get(id).onsuccess = e => {
         const d = e.target.result;
-        const html = `<html><body style="background:#020617;color:white;padding:40px;font-family:sans-serif;"><h2>${d.start}</h2><p>${d.note || ''}</p><audio controls src="${d.audio}"></audio></body></html>`;
+        const html = `<html><body style="background:#020617;color:white;padding:40px;font-family:sans-serif;"><h2>Sessioon: ${d.start}</h2><p>${d.note || ''}</p><audio controls src="${d.audio}"></audio></body></html>`;
         const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([html], {type:'text/html'}));
         a.download = `Sessioon_${d.id}.html`; a.click();
     };
