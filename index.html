@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Peegel Pro v78</title>
+    <title>Peegel Pro v79</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -22,7 +22,7 @@
 
         <div id="setup-screen" class="pt-20 flex flex-col items-center">
             <button onclick="startSession()" class="bg-blue-600 w-36 h-36 rounded-full font-black text-2xl text-white shadow-2xl border-4 border-blue-400 active:scale-90">START</button>
-            <p class="mt-4 text-slate-500 text-xs uppercase tracking-widest">v78: Puhas Logi</p>
+            <p class="mt-4 text-slate-500 text-xs uppercase tracking-widest">v79: Töökorras</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4">
@@ -63,6 +63,9 @@
     </div>
 
     <script>
+        // Kontrollime kohe, kas kood laeb
+        console.log("Peegel v79 laetud");
+
         const VOLUME_THRESHOLD = 6.0; 
         const MIN_HZ = 80;            
         const AUTO_FIX_MS = 600000; 
@@ -89,7 +92,9 @@
         dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
+        // START FUNKTSIOON
         async function startSession() {
+            console.log("Start nuppu vajutati"); // Debug logi
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -136,7 +141,10 @@
                 sessionStartTime = new Date().toLocaleTimeString('et-EE');
                 isLive = true;
                 autoFixTimer = setInterval(fixSession, AUTO_FIX_MS);
-            } catch (err) { alert("Mikrofoni viga! Veendu, et lubasid mikrofoni."); }
+            } catch (err) { 
+                console.error(err);
+                alert("Mikrofoni viga! Kontrolli, et andsid loa."); 
+            }
         }
 
         async function stopAndSave() {
@@ -256,8 +264,7 @@
                                     <span style="color: #60a5fa;">-</span>
                                     <span class="text-red-500">${s.hzMax}</span>
                                 </span>
-                                
-                                </span>
+                            </span>
                             <button onclick="delS(${s.id})" style="color: #991b1b; font-weight: 800;">KUSTUTA</button>
                         </div>
                         <div class="p-4 bg-blue-500/5 rounded-2xl border border-blue-500/10 mb-3">
