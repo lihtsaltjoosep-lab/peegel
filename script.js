@@ -1,6 +1,6 @@
 let isLive = false, speechMs = 0, silenceMs = 0, db, stream, wakeLock = null;
 let rawRecorder;
-let rawChunks = [], cleanDataPool = []; // cleanDataPool hoiab ainult tooreid helibitte
+let rawChunks = [], cleanDataPool = []; 
 let speechMap = [], hzMin = Infinity, hzMax = 0, sessionStartTime = "";
 
 // 1. KELL (Oranž, õhuke)
@@ -9,8 +9,8 @@ setInterval(() => {
     if(clock) clock.innerText = new Date().toLocaleTimeString('et-EE'); 
 }, 1000);
 
-// 2. ANDMEBAAS (V38)
-const dbReq = indexedDB.open("Peegel_Pro_V38", 1);
+// 2. ANDMEBAAS (V39)
+const dbReq = indexedDB.open("Peegel_Pro_V39", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
@@ -22,15 +22,27 @@ document.getElementById('start-btn').onclick = async () => {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
         
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
         const ctx = new AudioContext();
         const analyser = ctx.createAnalyser();
         const processor = ctx.createScriptProcessor(2048, 1, 1);
         ctx.createMediaStreamSource(stream).connect(analyser).connect(processor);
         processor.connect(ctx.destination);
 
-        // TOORES SALVESTI
+        // MOOTOR 1: TOORES SALVESTI (Salvestab kõike)
         rawRecorder = new MediaRecorder(stream);
         rawRecorder.ondataavailable = e => { if (e.data.size > 0) rawChunks.push(e.data); };
+
+        // MOOTOR 2: PUHAS FILTRU (Tükeldab voo 100ms juppideks)
+        const filterRecorder = new MediaRecorder(stream);
+        filterRecorder.ondataavailable = e => {
+            // Kontrollime, kas viimase 100ms jooksul räägiti
+            // Kui jah, lisame selle tüki puhtasse massiivi
+            const recentSpeech = speechMap.slice(-3).some(m => m.s);
+            if (recentSpeech && isLive) {
+                cleanDataPool.push(e.data);
+            }
+        };
 
         processor.onaudioprocess = () => {
             if (!isLive) return;
@@ -38,49 +50,32 @@ document.getElementById('start-btn').onclick = async () => {
             analyser.getByteFrequencyData(data);
             const vol = data.reduce((a,b) => a+b) / data.length;
             
-            // Hz Analüüs
             let maxVal = -1, maxIdx = -1;
             for (let i = 0; i < data.length/2; i++) { if (data[i] > maxVal) { maxVal = data[i]; maxIdx = i; } }
             const hz = Math.round(maxIdx * (ctx.sampleRate/2) / (data.length/2));
+            
             if (hz > 40 && hz < 2000) {
                 if (hz < hzMin) hzMin = hz; if (hz > hzMax) hzMax = hz;
                 document.getElementById('hz-min-val').innerText = hzMin;
                 document.getElementById('hz-max-val').innerText = hzMax;
             }
 
-            const isSpeaking = vol > 2.8 && hz > 50;
-            
-            if (isSpeaking) {
+            const isSpeakingNow = vol > 2.8 && hz > 50;
+            if (isSpeakingNow) {
                 speechMs += 50;
                 document.getElementById('status-light').style.background = "#22c55e";
-                // SALVESTAME TOORED BITID: See on kriitiline koht - me ei kasuta recorderit, 
-                // vaid salvestame reaalajas "puhast" voogu massiivi.
-                // Kasutame selleks puhvrit.
             } else {
                 silenceMs += 50;
                 document.getElementById('status-light').style.background = "#334155";
             }
             
-            // Salvestame iga 100ms järel info, kas oli kõne
-            speechMap.push({ t: Date.now(), s: isSpeaking });
-            
+            speechMap.push({ s: isSpeakingNow });
             document.getElementById('speech-sec').innerText = Math.round(speechMs/1000) + "s";
             document.getElementById('silence-sec').innerText = Math.round(silenceMs/1000) + "s";
         };
 
-        // Salvestame puhast voogu 100ms kaupa
-        const cleanRecorderShim = new MediaRecorder(stream);
-        cleanRecorderShim.ondataavailable = (e) => {
-            const now = Date.now();
-            // Kui viimase 200ms jooksul oli häält, siis salvestame selle tüki
-            const wasSpeaking = speechMap.slice(-4).some(m => m.s);
-            if (wasSpeaking && isLive) {
-                cleanDataPool.push(e.data);
-            }
-        };
-
         rawRecorder.start();
-        cleanRecorderShim.start(100); // Tükeldame voo 100ms pikkusteks juppideks
+        filterRecorder.start(100); // Saadab 100ms pikkuseid pakette kontrollimiseks
         
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
         isLive = true;
@@ -96,9 +91,11 @@ async function fixSession(callback) {
     const snapStats = { min: hzMin, max: hzMax, s: speechMs, v: silenceMs };
 
     rawRecorder.onstop = async () => {
+        // Genereerime täiesti uue "Puhta" faili, kus puuduvad vaikuse ajad
         const fullBlob = new Blob(rawChunks, { type: 'audio/webm' });
-        // PUHAS FAIL: Paneme kokku ainult häälega tükid. 
-        // Kuna neil puuduvad vahepealsed "tühjad" ajatemplid, peab pleier seda uueks lühikeseks failiks.
+        
+        // Puhas fail luuakse ainult nendest bititükkidest, mis filtri läbisid
+        // See eemaldab failist vaikuse ja ajatemplid, nii et pleier näeb lühikest faili.
         const cleanBlob = new Blob(cleanDataPool, { type: 'audio/webm' });
 
         const fullBase = await toB64(fullBlob);
@@ -113,7 +110,7 @@ async function fixSession(callback) {
         });
 
         tx.oncomplete = () => {
-            rawChunks = []; cleanDataPool = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
+            rawChunks = []; cleanDataPool = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0; speechMap = [];
             document.getElementById('note-input').value = "";
             renderHistory(); if (callback) callback();
         };
@@ -125,7 +122,7 @@ async function fixSession(callback) {
 
 function toB64(b) { return new Promise(r => { const f = new FileReader(); f.onloadend = () => r(f.result); f.readAsDataURL(b); }); }
 
-// 5. LOGI (Värvid paigas)
+// 5. LOGI RENDERDAMINE (Värvid paigas)
 function renderHistory() {
     if(!db) return;
     const tx = db.transaction("sessions", "readonly");
