@@ -1,57 +1,198 @@
-<!DOCTYPE html>
-<html lang="et">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Peegel Pro v57</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
-        .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
-        .hidden { display: none !important; }
-        audio { height: 35px; width: 100%; border-radius: 12px; filter: invert(1) brightness(0.7) contrast(1.3) sepia(1) hue-rotate(195deg) saturate(6); }
-        #clock { color: #f59e0b; font-weight: 300; }
-    </style>
-</head>
-<body class="p-4 min-h-screen flex flex-col items-center">
-    <div class="w-full max-w-md space-y-4">
-        <div class="flex justify-between items-center p-2">
-            <h1 class="text-xl font-black text-blue-500 italic uppercase">Peegel</h1>
-            <div id="clock" class="text-3xl font-light tracking-tighter">00:00:00</div>
-        </div>
+const VOLUME_THRESHOLD = 3.8; 
+const MIN_HZ = 80;            
+const AUTO_FIX_MS = 600000; 
 
-        <div id="setup-screen" class="pt-20 flex flex-col items-center">
-            <button onclick="startSession()" class="bg-blue-600 w-36 h-36 rounded-full font-black text-2xl text-white shadow-2xl border-4 border-blue-400 active:scale-90">START</button>
-        </div>
+let isLive = false, speechMs = 0, silenceMs = 0, db, stream = null;
+let audioCtx = null, processor = null, source = null, speechBuffer = [];
+let hzMin = Infinity, hzMax = 0, sessionStartTime = "";
+let autoFixTimer = null;
 
-        <div id="active-session" class="hidden space-y-4">
-            <div class="glass rounded-[35px] p-6 shadow-2xl space-y-4 border-t border-blue-500/20">
-                <div class="flex justify-between items-center pb-3 border-b border-white/5">
-                    <div class="flex items-center gap-4">
-                        <div id="status-light" class="w-4 h-4 bg-slate-700 rounded-full transition-all"></div>
-                        <div class="flex gap-4 font-mono text-[14px] uppercase font-bold">
-                            <span class="text-green-400">V:<span id="speech-sec">0m 0s</span></span>
-                            <span class="text-blue-400">P:<span id="silence-sec">0m 0s</span></span>
-                        </div>
-                    </div>
-                    <div class="flex gap-2 font-mono text-[12px] uppercase font-bold">
-                        <span class="text-cyan-300">Hz <span id="hz-min-val" class="text-blue-500">0</span></span>
-                        <span class="text-red-500"><span id="hz-max-val">0</span></span>
-                    </div>
+// Kell
+setInterval(() => { 
+    const c = document.getElementById('clock');
+    if(c) c.innerText = new Date().toLocaleTimeString('et-EE'); 
+}, 1000);
+
+// Aja vormindus
+function formatTime(ms) {
+    const totalSeconds = Math.round(ms / 1000);
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m}m ${s}s`;
+}
+
+// Andmebaas
+const dbReq = indexedDB.open("Peegel_Final_V58", 1);
+dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
+dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
+
+// START
+async function startSession() {
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        source = audioCtx.createMediaStreamSource(stream);
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = "highpass";
+        filter.frequency.value = 100; 
+        const analyser = audioCtx.createAnalyser();
+        processor = audioCtx.createScriptProcessor(4096, 1, 1);
+        
+        source.connect(filter);
+        filter.connect(analyser);
+        analyser.connect(processor);
+        processor.connect(audioCtx.destination);
+
+        processor.onaudioprocess = (e) => {
+            if (!isLive) return;
+            const inputData = e.inputBuffer.getChannelData(0);
+            const data = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(data);
+            const vol = data.reduce((a,b) => a+b) / data.length;
+            let maxVal = -1, maxIdx = -1;
+            for (let i = 0; i < data.length/2; i++) { if (data[i] > maxVal) { maxVal = data[i]; maxIdx = i; } }
+            const hz = Math.round(maxIdx * (audioCtx.sampleRate/2) / (data.length/2));
+            
+            if (hz > 40 && hz < 2000) {
+                if (hz < hzMin) hzMin = hz; if (hz > hzMax) hzMax = hz;
+                document.getElementById('hz-min-val').innerText = hzMin;
+                document.getElementById('hz-max-val').innerText = hzMax;
+            }
+            if (vol > VOLUME_THRESHOLD && hz > MIN_HZ) {
+                speechMs += (4096 / audioCtx.sampleRate) * 1000;
+                document.getElementById('status-light').style.background = "#22c55e";
+                speechBuffer.push(new Float32Array(inputData));
+            } else {
+                silenceMs += (4096 / audioCtx.sampleRate) * 1000;
+                document.getElementById('status-light').style.background = "#334155";
+            }
+            document.getElementById('speech-sec').innerText = formatTime(speechMs);
+            document.getElementById('silence-sec').innerText = formatTime(silenceMs);
+        };
+
+        document.getElementById('setup-screen').classList.add('hidden');
+        document.getElementById('active-session').classList.remove('hidden');
+        sessionStartTime = new Date().toLocaleTimeString('et-EE');
+        isLive = true;
+        autoFixTimer = setInterval(fixSession, AUTO_FIX_MS);
+    } catch (err) { alert("Mikrofoni viga!"); }
+}
+
+// LÕPETAMINE JA SALVESTAMINE
+async function stopAndSave() {
+    if (!isLive) return;
+    isLive = false;
+    clearInterval(autoFixTimer);
+    if (speechBuffer.length > 0) await fixSession();
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    location.reload();
+}
+
+// FIKSEERIMINE
+function fixSession() {
+    return new Promise((resolve) => {
+        if (speechBuffer.length === 0) return resolve();
+        const snapNote = document.getElementById('note-input').value;
+        const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
+        const snapStats = { min: hzMin, max: hzMax, s: speechMs, v: silenceMs };
+        const currentSpeech = [...speechBuffer], currentSR = audioCtx.sampleRate;
+        
+        speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
+        document.getElementById('note-input').value = "";
+        sessionStartTime = new Date().toLocaleTimeString('et-EE');
+
+        const cleanWav = bufferToWav(currentSpeech, currentSR);
+        toB64(cleanWav).then(cleanBase => {
+            const tx = db.transaction("sessions", "readwrite");
+            tx.objectStore("sessions").add({
+                id: Date.now(), start: snapStart, end: snapEnd,
+                date: new Date().toLocaleDateString('et-EE'),
+                hzMin: snapStats.min, hzMax: snapStats.max,
+                note: snapNote, audioClean: cleanBase,
+                sMs: snapStats.s, vMs: snapStats.v
+            });
+            tx.oncomplete = () => { renderHistory(); resolve(); };
+        });
+    });
+}
+
+// WAV loomine
+function bufferToWav(chunks, sampleRate) {
+    const length = chunks.reduce((acc, curr) => acc + curr.length, 0);
+    const buffer = new ArrayBuffer(44 + length * 2);
+    const view = new DataView(buffer);
+    const writeString = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+    writeString(0, 'RIFF'); view.setUint32(4, 32 + length * 2, true); writeString(8, 'WAVE'); writeString(12, 'fmt ');
+    view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeString(36, 'data');
+    view.setUint32(40, length * 2, true);
+    let offset = 44;
+    for (let chunk of chunks) {
+        for (let i = 0; i < chunk.length; i++) {
+            const s = Math.max(-1, Math.min(1, chunk[i]));
+            view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+            offset += 2;
+        }
+    }
+    return new Blob([buffer], { type: 'audio/wav' });
+}
+
+function toB64(b) { return new Promise(r => { const f = new FileReader(); f.onloadend = () => r(f.result); f.readAsDataURL(b); }); }
+
+// HTML FAILINIMEGA ALLALAADIMINE
+function downloadSession(id) {
+    const tx = db.transaction("sessions", "readonly");
+    tx.objectStore("sessions").get(id).onsuccess = (e) => {
+        const s = e.target.result;
+        const htmlContent = `<html><body style="background:#020617;color:white;font-family:sans-serif;padding:40px;">
+            <h2>PEEGEL SESSIOON</h2>
+            <p>Kuupäev: ${s.date} | Aeg: ${s.start}-${s.end}</p>
+            <p>Hz: ${s.hzMin}-${s.hzMax} | Vestlus: ${formatTime(s.sMs)} | Paus: ${formatTime(s.vMs)}</p>
+            <hr style="opacity:0.2"><h3>MÄRKMED:</h3>
+            <div style="background:rgba(255,255,255,0.05);padding:20px;border-radius:10px;white-space:pre-wrap;">${s.note || 'Märkmed puuduvad'}</div>
+            <br><h3>HELI:</h3>
+            <audio controls src="${s.audioClean}" style="width:100%"></audio>
+        </body></html>`;
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Sessioon_${s.date}_${s.start.replace(/:/g, '-')}.html`;
+        link.click();
+    };
+}
+
+// LOGI KUVAMINE
+function renderHistory() {
+    if(!db) return;
+    const tx = db.transaction("sessions", "readonly");
+    tx.objectStore("sessions").getAll().onsuccess = e => {
+        const list = e.target.result.sort((a,b) => b.id - a.id);
+        document.getElementById('history-container').innerHTML = list.map(s => `
+            <div class="glass rounded-[30px] p-5 text-left mb-4">
+                <div class="flex justify-between items-center text-[11px] uppercase font-bold mb-3">
+                    <span class="flex gap-2 items-center">
+                        <span style="color: #22c55e;">${s.start}-${s.end}</span>
+                        <span style="color: #334155;">|</span>
+                        <span style="color: #3b82f6;">${s.hzMin}-${s.hzMax} <span style="color: #67e8f9; font-weight:400">HZ</span></span>
+                        <span style="color: #334155;">|</span>
+                        <span style="color: #f59e0b;">P:${formatTime(s.vMs)}</span>
+                    </span>
+                    <button onclick="delS(${s.id})" style="color: #991b1b; font-weight: 800;">KUSTUTA</button>
                 </div>
-                <textarea id="note-input" class="w-full bg-transparent text-sm text-slate-200 focus:outline-none placeholder-slate-800 resize-none font-medium h-32 pt-2" placeholder="Kirjuta märkmed siia..." rows="5"></textarea>
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-                <button id="fix-btn" onclick="fixSession()" class="bg-blue-600 text-white py-5 rounded-[25px] font-black uppercase text-xs tracking-widest active:scale-95 shadow-lg">Fikseeri</button>
-                <button id="stop-btn" onclick="stopAndSave()" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-black uppercase text-xs active:scale-95">Lõpeta</button>
-            </div>
-        </div>
+                <div class="p-4 bg-blue-500/5 rounded-2xl border border-blue-500/10 mb-3">
+                    <div class="flex justify-between items-center text-[9px] font-black text-blue-400 uppercase mb-2">
+                        <span>Vestlus: ${formatTime(s.sMs)}</span>
+                        <button onclick="downloadSession(${s.id})" class="text-blue-400 border border-blue-400/20 px-2 py-1 rounded">Download HTML</button>
+                    </div>
+                    <audio src="${s.audioClean}" controls preload="metadata"></audio>
+                </div>
+                ${s.note && s.note.trim() !== "" ? `
+                <button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-2 text-[10px] font-black uppercase bg-blue-500/10 rounded-xl" style="color: #3b82f6;">Kuva Märge</button>
+                <div class="hidden p-4 bg-black/40 rounded-xl text-xs italic text-slate-300 border-l-2 border-blue-500 mt-2">${s.note}</div>
+                ` : ''}
+            </div>`).join('');
+    };
+}
 
-        <div class="w-full space-y-4 pt-4 pb-24 text-center">
-            <h3 class="text-[10px] font-black uppercase tracking-[0.4em] text-slate-700 italic">Sessioonide logi</h3>
-            <div id="history-container" class="space-y-4 mt-4"></div>
-        </div>
-    </div>
-    <script src="script.js"></script>
-</body>
-</html>
+window.delS = id => { if(confirm("Kustuta?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id); tx.oncomplete = renderHistory; } };
