@@ -1,7 +1,5 @@
-// --- SEADISTUS TAUSTAMÜRA IGNOREERIMISEKS ---
-const VOLUME_THRESHOLD = 3.8; // Tõstetud 2.5 -> 3.8 (ignoreerib nõrgemat taustamüra)
-const MIN_HZ = 80;            // Ignoreerib väga madalat juminat (nt mootorid)
-// -------------------------------------------
+const VOLUME_THRESHOLD = 3.8; 
+const MIN_HZ = 80;            
 
 let isLive = false, speechMs = 0, silenceMs = 0, db, stream = null;
 let audioCtx = null, processor = null, source = null, speechBuffer = [];
@@ -12,8 +10,7 @@ setInterval(() => {
     if(c) c.innerText = new Date().toLocaleTimeString('et-EE'); 
 }, 1000);
 
-// ANDMEBAAS (Uus versioon, et testida puhtalt lehelt)
-const dbReq = indexedDB.open("Peegel_NoNoise_v49", 1);
+const dbReq = indexedDB.open("Peegel_V50_BigUI", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
@@ -23,10 +20,9 @@ async function startSession() {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         source = audioCtx.createMediaStreamSource(stream);
         
-        // LISATUD: Kõrgpääsfilter, mis lõikab ära madala taustamüra/mumina
         const filter = audioCtx.createBiquadFilter();
         filter.type = "highpass";
-        filter.frequency.value = 100; // Lõikab kõik alla 100Hz (tüüpiline müra)
+        filter.frequency.value = 100; 
 
         const analyser = audioCtx.createAnalyser();
         processor = audioCtx.createScriptProcessor(4096, 1, 1);
@@ -41,21 +37,16 @@ async function startSession() {
             const inputData = e.inputBuffer.getChannelData(0);
             const data = new Uint8Array(analyser.frequencyBinCount);
             analyser.getByteFrequencyData(data);
-            
             const vol = data.reduce((a,b) => a+b) / data.length;
             let maxVal = -1, maxIdx = -1;
             for (let i = 0; i < data.length/2; i++) { if (data[i] > maxVal) { maxVal = data[i]; maxIdx = i; } }
             const hz = Math.round(maxIdx * (audioCtx.sampleRate/2) / (data.length/2));
-            
             if (hz > 40 && hz < 2000) {
                 if (hz < hzMin) hzMin = hz; if (hz > hzMax) hzMax = hz;
                 document.getElementById('hz-min-val').innerText = hzMin;
                 document.getElementById('hz-max-val').innerText = hzMax;
             }
-
-            // FILTER: Helitugevus peab olema üle läve JA sagedus peab olema inimkõne alas
             const isSpeaking = vol > VOLUME_THRESHOLD && hz > MIN_HZ;
-
             if (isSpeaking) {
                 speechMs += (4096 / audioCtx.sampleRate) * 1000;
                 document.getElementById('status-light').style.background = "#22c55e";
@@ -64,11 +55,9 @@ async function startSession() {
                 silenceMs += (4096 / audioCtx.sampleRate) * 1000;
                 document.getElementById('status-light').style.background = "#334155";
             }
-            
             document.getElementById('speech-sec').innerText = Math.round(speechMs/1000) + "s";
             document.getElementById('silence-sec').innerText = Math.round(silenceMs/1000) + "s";
         };
-
         document.getElementById('setup-screen').classList.add('hidden');
         document.getElementById('active-session').classList.remove('hidden');
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
@@ -77,24 +66,16 @@ async function startSession() {
 }
 
 async function fixSession() {
-    if (!isLive || speechBuffer.length === 0) {
-        alert("Vestlust ei tuvastatud (lävi on kõrge). Räägi kõvemini!");
-        return;
-    }
+    if (!isLive || speechBuffer.length === 0) return;
     const snapNote = document.getElementById('note-input').value;
-    const snapStart = sessionStartTime;
-    const snapEnd = new Date().toLocaleTimeString('et-EE');
+    const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
     const snapStats = { min: hzMin, max: hzMax, s: speechMs, v: silenceMs };
-    const currentSpeech = [...speechBuffer];
-    const currentSR = audioCtx.sampleRate;
-
+    const currentSpeech = [...speechBuffer], currentSR = audioCtx.sampleRate;
     speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
     document.getElementById('note-input').value = "";
     sessionStartTime = new Date().toLocaleTimeString('et-EE');
-
     const cleanWav = bufferToWav(currentSpeech, currentSR);
     const cleanBase = await toB64(cleanWav);
-
     const tx = db.transaction("sessions", "readwrite");
     tx.objectStore("sessions").add({
         id: Date.now(), start: snapStart, end: snapEnd,
@@ -135,17 +116,16 @@ function renderHistory() {
         const list = e.target.result.sort((a,b) => b.id - a.id);
         document.getElementById('history-container').innerHTML = list.map(s => `
             <div class="glass rounded-[30px] p-5 space-y-4 shadow-xl border border-white/5 text-left">
-                <div class="flex justify-between items-center text-[10px] uppercase tracking-tight font-light">
-                    <span class="flex gap-1 items-center">
+                <div class="flex justify-between items-center text-[11px] uppercase tracking-tight">
+                    <span class="flex gap-2 items-center">
                         <span class="text-log-time font-bold">${s.start}-${s.end}</span>
                         <span class="text-divider">|</span>
-                        <span class="text-hz-low">${s.hzMin}</span><span class="text-divider">-</span><span class="text-hz-high">${s.hzMax} Hz</span>
+                        <span class="text-hz-low font-bold">${s.hzMin}</span><span class="text-divider">-</span><span class="text-hz-high font-bold">${s.hzMax}</span>
                         <span class="text-divider">|</span>
-                        <span class="text-log-silence">V: ${s.v}s</span>
+                        <span class="text-log-silence font-bold">V:${s.v}s</span>
                     </span>
                     <button onclick="delS(${s.id})" class="btn-delete-dark">KUSTUTA</button>
                 </div>
-                
                 <div class="p-4 bg-green-500/5 rounded-2xl space-y-3 border border-green-500/10">
                     <div class="flex justify-between items-center text-[9px] font-black text-green-500 uppercase tracking-widest">
                         <span>Puhas vestlus (${s.s}s)</span>
@@ -153,7 +133,6 @@ function renderHistory() {
                     </div>
                     <audio src="${s.audioClean}" controls preload="metadata"></audio>
                 </div>
-
                 <button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-3 text-[10px] font-black uppercase text-log-time bg-green-500/10 rounded-2xl">Kuva Märge</button>
                 <div class="hidden p-4 bg-black/40 rounded-2xl text-xs italic text-slate-300 border-l-2 border-green-500">${s.note || '...'}</div>
             </div>`).join('');
