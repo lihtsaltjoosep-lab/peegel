@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Peegel Pro v73</title>
+    <title>Peegel Pro v74</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -22,7 +22,7 @@
 
         <div id="setup-screen" class="pt-20 flex flex-col items-center">
             <button onclick="startSession()" class="bg-blue-600 w-36 h-36 rounded-full font-black text-2xl text-white shadow-2xl border-4 border-blue-400 active:scale-90">START</button>
-            <p class="mt-4 text-slate-500 text-xs uppercase tracking-widest">v73: Kõik Ühes Failis</p>
+            <p class="mt-4 text-slate-500 text-xs uppercase tracking-widest">v74: Õiged Värvid</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4">
@@ -32,13 +32,16 @@
                         <div id="status-light" class="w-4 h-4 bg-slate-700 rounded-full transition-all"></div>
                         <div class="flex gap-4 font-mono text-[14px] uppercase font-bold">
                             <span class="text-green-400">V:<span id="speech-sec">0m 0s</span></span>
-                            <span style="color: #60a5fa;">P:<span id="silence-sec">0m 0s</span></span>
+                            
+                            <span style="color: #60a5fa;">P:<span id="silence-sec" style="color: #bfdbfe;">0m 0s</span></span>
                         </div>
                     </div>
                     
                     <div class="flex gap-2 font-mono text-[12px] uppercase font-bold items-center">
-                        <span class="text-cyan-300">Hz</span>
-                        <span style="color: #1d4ed8;" id="hz-min-val">0</span>
+                        <span style="color: #1d4ed8; font-weight: 900;">Hz</span>
+
+                        <span style="color: #60a5fa;" id="hz-min-val">0</span>
+                        
                         <span class="text-red-500" id="hz-max-val">0</span>
                     </div>
                 </div>
@@ -209,70 +212,4 @@
             const tx = db.transaction("sessions", "readonly");
             tx.objectStore("sessions").get(id).onsuccess = (e) => {
                 const s = e.target.result;
-                const htmlContent = `<!DOCTYPE html><html lang="et"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Peegel Sessioon ${s.date}</title><style>body{background:#0f172a;color:#e2e8f0;font-family:sans-serif;padding:2rem;max-width:800px;margin:0 auto;line-height:1.6}.card{background:rgba(30,41,59,0.5);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:2rem;margin-bottom:2rem}h1{color:#3b82f6;font-style:italic;text-transform:uppercase;margin-top:0}.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-bottom:2rem}.stat-box{background:rgba(0,0,0,0.2);padding:1rem;border-radius:10px;border-left:3px solid #3b82f6}.stat-label{font-size:0.8rem;text-transform:uppercase;color:#94a3b8;font-weight:bold;display:block}.stat-value{font-size:1.2rem;font-weight:bold;color:white}.notes-box{background:rgba(255,255,255,0.05);padding:1.5rem;border-radius:10px;white-space:pre-wrap;font-family:monospace;border-left:3px solid #f59e0b}audio{width:100%;margin-top:1rem;filter:invert(1) brightness(0.8)}hr{border-color:rgba(255,255,255,0.1);margin:2rem 0}</style></head><body><div class="card"><div style="display:flex;justify-content:space-between;align-items:center;"><h1>Peegel Andmekapsel</h1><div style="text-align:right;font-size:0.9rem;color:#94a3b8;">${s.date}<br>${s.start} - ${s.end}</div></div><hr><div class="stats-grid"><div class="stat-box"><span class="stat-label" style="color:#22c55e">Kõne</span><span class="stat-value">${formatTime(s.sMs)}</span></div><div class="stat-box"><span class="stat-label" style="color:#f59e0b">Vaikus</span><span class="stat-value">${formatTime(s.vMs)}</span></div><div class="stat-box"><span class="stat-label" style="color:#3b82f6">Sagedus</span><span class="stat-value">${s.hzMin} - ${s.hzMax} Hz</span></div><div class="stat-box"><span class="stat-label">Kokku</span><span class="stat-value">${formatTime(s.sMs + s.vMs)}</span></div></div><h3>MÄRKMED</h3><div class="notes-box">${s.note ? s.note : 'Märkmed puuduvad'}</div><hr><h3>HELI</h3><audio controls src="${s.audioClean}"></audio></div></body></html>`;
-                const blob = new Blob([htmlContent], { type: 'text/html' });
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(blob);
-                link.download = `Peegel_Kapsel_${s.date}_${s.start.replace(/:/g, '-')}.html`;
-                link.click();
-            };
-        }
-
-        function downloadRawWav(audioData, id) {
-            const link = document.createElement('a');
-            link.href = audioData;
-            link.download = `Peegel_Audio_${id}.wav`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
-        function renderHistory() {
-            if(!db) return;
-            const tx = db.transaction("sessions", "readonly");
-            tx.objectStore("sessions").getAll().onsuccess = e => {
-                const list = e.target.result.sort((a,b) => b.id - a.id);
-                const html = list.map(s => {
-                    const noteHtml = s.note && s.note.trim() !== "" ? 
-                        `<button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-2 text-[10px] font-black uppercase bg-blue-500/10 rounded-xl hover:bg-blue-500/20 transition-all" style="color: #3b82f6;">Kuva Märge</button>
-                         <div class="hidden p-4 bg-black/40 rounded-xl text-xs italic text-slate-300 border-l-2 border-blue-500 mt-2 whitespace-pre-wrap">${s.note}</div>` 
-                        : '';
-                    
-                    return `
-                    <div class="glass rounded-[30px] p-5 mb-4 text-left">
-                        <div class="flex justify-between items-center text-[11px] uppercase font-bold mb-3">
-                            <span class="flex gap-2 items-center">
-                                <span style="color: #22c55e;">${s.start}-${s.end}</span>
-                                
-                                <span>
-                                    <span class="text-cyan-300">Hz</span>
-                                    <span style="color: #1d4ed8;">${s.hzMin}</span>
-                                    <span style="color: #60a5fa;">-</span>
-                                    <span class="text-red-500">${s.hzMax}</span>
-                                </span>
-
-                                <span style="color: #f59e0b;">P:${formatTime(s.vMs)}</span>
-                            </span>
-                            <button onclick="delS(${s.id})" style="color: #991b1b; font-weight: 800;">KUSTUTA</button>
-                        </div>
-                        <div class="p-4 bg-blue-500/5 rounded-2xl border border-blue-500/10 mb-3">
-                            <div class="flex justify-between items-center text-[9px] font-black text-blue-400 uppercase mb-2">
-                                <span>Pikkus: ${formatTime(s.sMs)}</span>
-                                <div class="flex gap-2">
-                                    <button onclick="downloadCapsule(${s.id})" class="text-white bg-blue-600 border-0 px-2 py-1 rounded shadow text-[9px] active:scale-95">HTML</button>
-                                    <button onclick="downloadRawWav('${s.audioClean}', '${s.id}')" class="text-white bg-slate-600 border-0 px-2 py-1 rounded shadow text-[9px] active:scale-95">WAV</button>
-                                </div>
-                            </div>
-                            <audio src="${s.audioClean}" controls preload="metadata"></audio>
-                        </div>
-                        ${noteHtml}
-                    </div>`;
-                }).join('');
-                document.getElementById('history-container').innerHTML = html;
-            };
-        }
-
-        window.delS = id => { if(confirm("Kustuta?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id); tx.oncomplete = renderHistory; } };
-    </script>
-</body>
-</html>
+                const htmlContent = `<!DOCTYPE html><html lang="et"><head><meta charset="UTF-8"><meta name="viewport" content="width
