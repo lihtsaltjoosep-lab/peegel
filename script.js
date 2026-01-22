@@ -19,8 +19,8 @@ setInterval(() => {
     if(c) c.innerText = new Date().toLocaleTimeString('et-EE'); 
 }, 1000);
 
-// UUS ANDMEBAASI NIMI v59 - et alustada puhtalt lehelt
-const dbReq = indexedDB.open("Peegel_Final_V59", 1);
+// Uus andmebaasi versioon v61
+const dbReq = indexedDB.open("Peegel_DataCapsule_V61", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
@@ -48,6 +48,7 @@ async function startSession() {
             let maxVal = -1, maxIdx = -1;
             for (let i = 0; i < data.length/2; i++) { if (data[i] > maxVal) { maxVal = data[i]; maxIdx = i; } }
             const hz = Math.round(maxIdx * (audioCtx.sampleRate/2) / (data.length/2));
+            
             if (hz > 40 && hz < 2000) {
                 if (hz < hzMin) hzMin = hz; if (hz > hzMax) hzMax = hz;
                 document.getElementById('hz-min-val').innerText = hzMin;
@@ -132,14 +133,78 @@ function bufferToWav(chunks, sampleRate) {
 
 function toB64(b) { return new Promise(r => { const f = new FileReader(); f.onloadend = () => r(f.result); f.readAsDataURL(b); }); }
 
-// ALLALAADIMISE FUNKTSIOON - PUHAS WAV
-function downloadWav(dataUri, fileName) {
-    const link = document.createElement('a');
-    link.href = dataUri;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+// SEE ON "ANDMEKAPSLI" LOOJA
+function downloadCapsule(id) {
+    const tx = db.transaction("sessions", "readonly");
+    tx.objectStore("sessions").get(id).onsuccess = (e) => {
+        const s = e.target.result;
+        // See HTML sisaldab KÕIKE (Heli + Statistika + Märkmed)
+        const htmlContent = `
+        <!DOCTYPE html>
+        <html lang="et">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Peegel Sessioon ${s.date}</title>
+            <style>
+                body { background: #0f172a; color: #e2e8f0; font-family: sans-serif; padding: 2rem; max-width: 800px; margin: 0 auto; line-height: 1.6; }
+                .card { background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 2rem; margin-bottom: 2rem; }
+                h1 { color: #3b82f6; font-style: italic; text-transform: uppercase; margin-top: 0; }
+                .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 2rem; }
+                .stat-box { background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 10px; border-left: 3px solid #3b82f6; }
+                .stat-label { font-size: 0.8rem; text-transform: uppercase; color: #94a3b8; font-weight: bold; display: block; }
+                .stat-value { font-size: 1.2rem; font-weight: bold; color: white; }
+                .notes-box { background: rgba(255,255,255,0.05); padding: 1.5rem; border-radius: 10px; white-space: pre-wrap; font-family: monospace; border-left: 3px solid #f59e0b; }
+                audio { width: 100%; margin-top: 1rem; filter: invert(1) brightness(0.8); }
+                hr { border-color: rgba(255,255,255,0.1); margin: 2rem 0; }
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h1>Peegel Andmekapsel</h1>
+                    <div style="text-align:right; font-size:0.9rem; color:#94a3b8;">${s.date}<br>${s.start} - ${s.end}</div>
+                </div>
+                
+                <hr>
+
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <span class="stat-label" style="color:#22c55e">Kõne Kestvus</span>
+                        <span class="stat-value">${formatTime(s.sMs)}</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-label" style="color:#f59e0b">Vaikuse Aeg</span>
+                        <span class="stat-value">${formatTime(s.vMs)}</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-label" style="color:#3b82f6">Sagedus (Hz)</span>
+                        <span class="stat-value">${s.hzMin} - ${s.hzMax}</span>
+                    </div>
+                     <div class="stat-box">
+                        <span class="stat-label">Kogu Sessioon</span>
+                        <span class="stat-value">${formatTime(s.sMs + s.vMs)}</span>
+                    </div>
+                </div>
+
+                <h3>MÄRKMED</h3>
+                <div class="notes-box">${s.note ? s.note : 'Märkmed puuduvad'}</div>
+
+                <hr>
+
+                <h3>HELI SALVESTUS</h3>
+                <audio controls src="${s.audioClean}"></audio>
+            </div>
+        </body>
+        </html>`;
+        
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        // Faili nimi on nüüd puhas kuupäev, ei mingeid märkmeid nimes
+        link.download = `Peegel_Kapsel_${s.date}_${s.start.replace(/:/g, '-')}.html`;
+        link.click();
+    };
 }
 
 function renderHistory() {
@@ -147,31 +212,24 @@ function renderHistory() {
     const tx = db.transaction("sessions", "readonly");
     tx.objectStore("sessions").getAll().onsuccess = e => {
         const list = e.target.result.sort((a,b) => b.id - a.id);
-        document.getElementById('history-container').innerHTML = list.map(s => {
-            const fileName = `Audio_${s.id}.wav`;
-            return `
+        document.getElementById('history-container').innerHTML = list.map(s => `
             <div class="glass rounded-[30px] p-5 mb-4 text-left">
                 <div class="flex justify-between items-center text-[11px] uppercase font-bold mb-3">
                     <span class="flex gap-2 items-center">
                         <span style="color: #22c55e;">${s.start}-${s.end}</span>
-                        <span style="color: #3b82f6;">${s.hzMin}-${s.hzMax} <span style="color: #67e8f9; font-weight:400">HZ</span></span>
-                        <span style="color: #f59e0b;">P:${formatTime(s.vMs)}</span>
+                        <span style="color: #3b82f6;">${s.hzMin}-${s.hzMax} Hz</span>
                     </span>
                     <button onclick="delS(${s.id})" style="color: #991b1b; font-weight: 800;">KUSTUTA</button>
                 </div>
-                <div class="p-4 bg-blue-500/5 rounded-2xl border border-blue-500/10 mb-3">
-                    <div class="flex justify-between items-center text-[9px] font-black text-blue-400 uppercase mb-2">
-                        <span>Vestlus: ${formatTime(s.sMs)}</span>
-                        <button onclick="downloadWav('${s.audioClean}', '${fileName}')" class="bg-blue-600 text-white border-0 px-3 py-1 rounded shadow-lg active:scale-95">DOWNLOAD WAV</button>
+                <div class="p-4 bg-blue-500/5 rounded-2xl border border-blue-500/10 mb-3 flex justify-between items-center">
+                    <div class="text-[10px] uppercase font-bold text-slate-400">
+                        Märkmed: ${s.note ? s.note.substring(0, 15) + '...' : '-'}
                     </div>
-                    <audio src="${s.audioClean}" controls preload="metadata"></audio>
+                    <button onclick="downloadCapsule(${s.id})" class="bg-blue-600 text-white text-[10px] font-black uppercase px-4 py-2 rounded-full shadow-lg active:scale-95 hover:bg-blue-500">
+                        LAE ALLA KAPSEL
+                    </button>
                 </div>
-                ${s.note && s.note.trim() !== "" ? `
-                <button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-2 text-[10px] font-black uppercase bg-blue-500/10 rounded-xl" style="color: #3b82f6;">Kuva Märge</button>
-                <div class="hidden p-4 bg-black/40 rounded-xl text-xs italic text-slate-300 border-l-2 border-blue-500 mt-2">${s.note}</div>
-                ` : ''}
-            </div>`;
-        }).join('');
+            </div>`).join('');
     };
 }
 
