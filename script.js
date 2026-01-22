@@ -9,7 +9,7 @@ setInterval(() => {
 }, 1000);
 
 // ANDMEBAAS
-const dbReq = indexedDB.open("Peegel_Stable_v45", 1);
+const dbReq = indexedDB.open("Peegel_Stable_v46", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
@@ -46,7 +46,7 @@ async function startSession() {
             const isSpeaking = vol > 2.5 && hz > 50;
             if (isSpeaking) {
                 speechMs += (4096 / audioCtx.sampleRate) * 1000;
-                document.getElementById('status-light').style.background = "#22c55e";
+                document.getElementById('status-light').style.background = "#22d3ee"; // Türkiis monitoril
                 speechBuffer.push(new Float32Array(inputData));
             } else {
                 silenceMs += (4096 / audioCtx.sampleRate) * 1000;
@@ -75,7 +75,6 @@ async function fixSession() {
     const currentSpeech = [...speechBuffer];
     const currentSR = audioCtx.sampleRate;
 
-    // Nullime puhvrid uueks sessiooniks
     speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
     document.getElementById('note-input').value = "";
     sessionStartTime = new Date().toLocaleTimeString('et-EE');
@@ -126,23 +125,23 @@ function renderHistory() {
             <div class="glass rounded-[30px] p-5 space-y-4 shadow-xl border border-white/5 text-left">
                 <div class="flex justify-between text-[10px] font-bold uppercase tracking-tight">
                     <span>
-                        <span class="text-fix-orange">${s.start}-${s.end}</span>
+                        <span class="text-matrix-green">${s.start}-${s.end}</span>
                         <span class="text-divider"> | </span>
-                        <span class="text-hz-blue">${s.hzMin}-${s.hzMax} Hz</span>
+                        <span class="text-hz-low">${s.hzMin}</span><span class="text-divider">-</span><span class="text-hz-high">${s.hzMax} Hz</span>
                         <span class="text-divider"> | </span>
-                        <span class="text-silence-red">V: ${s.v}s</span>
+                        <span class="text-silence-orange">V: ${s.v}s</span>
                     </span>
                     <button onclick="delS(${s.id})" class="btn-delete-dark">KUSTUTA</button>
                 </div>
-                <div class="p-4 bg-green-500/5 rounded-2xl space-y-3 border border-green-500/10">
-                    <div class="flex justify-between items-center text-[9px] font-black text-green-400 uppercase tracking-widest">
+                <div class="p-4 bg-cyan-500/5 rounded-2xl space-y-3 border border-cyan-500/10">
+                    <div class="flex justify-between items-center text-[9px] font-black text-cyan-400 uppercase tracking-widest">
                         <span>Puhas vestlus (${s.s}s)</span>
-                        <button onclick="dl('${s.audioClean}', 'Puhas_${s.id}')" class="text-green-400 border border-green-400/20 px-2 py-0.5 rounded">Download</button>
+                        <button onclick="dl('${s.audioClean}', 'Puhas_${s.id}')" class="text-cyan-400 border border-cyan-400/20 px-2 py-0.5 rounded">Download</button>
                     </div>
                     <audio src="${s.audioClean}" controls preload="metadata"></audio>
                 </div>
-                <button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-3 text-[10px] font-black uppercase text-fix-orange bg-yellow-500/10 rounded-2xl">Kuva Märge</button>
-                <div class="hidden p-4 bg-black/40 rounded-2xl text-xs italic text-slate-300 border-l-2 border-yellow-500">${s.note || '...'}</div>
+                <button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-3 text-[10px] font-black uppercase text-matrix-green bg-green-500/10 rounded-2xl">Kuva Märge</button>
+                <div class="hidden p-4 bg-black/40 rounded-2xl text-xs italic text-slate-300 border-l-2 border-green-500">${s.note || '...'}</div>
             </div>`).join('');
     };
 }
