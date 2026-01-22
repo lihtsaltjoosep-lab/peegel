@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Peegel Pro v75</title>
+    <title>Peegel Pro v76</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -22,7 +22,7 @@
 
         <div id="setup-screen" class="pt-20 flex flex-col items-center">
             <button onclick="startSession()" class="bg-blue-600 w-36 h-36 rounded-full font-black text-2xl text-white shadow-2xl border-4 border-blue-400 active:scale-90">START</button>
-            <p class="mt-4 text-slate-500 text-xs uppercase tracking-widest">v75: Värvid Paigas</p>
+            <p class="mt-4 text-slate-500 text-xs uppercase tracking-widest">v76: Tume P, Hele Aeg</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4">
@@ -33,7 +33,10 @@
                         <div class="flex gap-4 font-mono text-[14px] uppercase font-bold">
                             <span class="text-green-400">V:<span id="speech-sec">0m 0s</span></span>
                             
-                            <span style="color: #60a5fa;">P:<span id="silence-sec" style="color: #60a5fa;">0m 0s</span></span>
+                            <span>
+                                <span style="color: #1d4ed8; font-weight: 900;">P:</span>
+                                <span id="silence-sec" style="color: #60a5fa;">0m 0s</span>
+                            </span>
                         </div>
                     </div>
                     
