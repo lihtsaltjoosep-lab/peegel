@@ -3,26 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Peegel Pro v47</title>
+    <title>Peegel Pro v50</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
         .hidden { display: none !important; }
         
-        /* Pleier: Türkiissinine */
-        audio { height: 35px; width: 100%; border-radius: 12px; filter: invert(1) hue-rotate(150deg) brightness(1.1); }
+        /* Pleier: Tumeroheline */
+        audio { height: 35px; width: 100%; border-radius: 12px; filter: invert(1) brightness(0.8) contrast(1.2) sepia(1) hue-rotate(70deg) saturate(4); }
         
         #clock { color: #f59e0b; font-weight: 300; }
         
-        /* Logi värvid ja peen tekst */
-        .text-log-time { color: #22c55e; font-weight: 300; }     /* Aeg - Roheline */
-        .text-hz-low { color: #3b82f6; font-weight: 300; }       /* Min Hz - Sinine */
-        .text-hz-high { color: #ef4444; font-weight: 300; }      /* Max Hz - Punane */
-        .text-log-silence { color: #f59e0b; font-weight: 300; }  /* Vaikus - Oranž */
-        .text-divider { color: #334155; font-weight: 200; }
-        
-        .btn-delete-dark { color: #991b1b; font-weight: 800; font-size: 9px; }
+        /* Logi stiilid */
+        .text-log-time { color: #22c55e; font-weight: 600; }     
+        .text-hz-low { color: #3b82f6; font-weight: 600; }       
+        .text-hz-high { color: #ef4444; font-weight: 600; }      
+        .text-log-silence { color: #f59e0b; font-weight: 600; }  
+        .text-divider { color: #334155; }
+        .btn-delete-dark { color: #991b1b; font-weight: 800; font-size: 10px; }
     </style>
 </head>
 <body class="p-4 min-h-screen flex flex-col items-center">
@@ -39,15 +38,15 @@
 
         <div id="active-session" class="hidden space-y-4">
             <div class="glass rounded-[35px] p-6 shadow-2xl space-y-4 border-t border-blue-500/20">
-                <div class="flex justify-between items-center pb-2 border-b border-white/5">
-                    <div class="flex items-center gap-3">
-                        <div id="status-light" class="w-3 h-3 bg-slate-700 rounded-full transition-all"></div>
-                        <div class="flex gap-3 font-mono text-[11px] uppercase">
-                            <span class="text-green-400">V: <span id="speech-sec">0s</span></span>
-                            <span class="text-blue-400">P: <span id="silence-sec">0s</span></span>
+                <div class="flex justify-between items-center pb-3 border-b border-white/5">
+                    <div class="flex items-center gap-4">
+                        <div id="status-light" class="w-4 h-4 bg-slate-700 rounded-full transition-all"></div>
+                        <div class="flex gap-4 font-mono text-[14px] uppercase font-bold">
+                            <span class="text-green-400">V:<span id="speech-sec">0s</span></span>
+                            <span class="text-blue-400">P:<span id="silence-sec">0s</span></span>
                         </div>
                     </div>
-                    <div class="flex gap-3 font-mono text-[9px] uppercase">
+                    <div class="flex gap-4 font-mono text-[12px] uppercase font-bold">
                         <span class="text-blue-500">Min:<span id="hz-min-val">0</span></span>
                         <span class="text-red-500">Max:<span id="hz-max-val">0</span></span>
                     </div>
