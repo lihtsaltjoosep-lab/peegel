@@ -3,67 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Peegel v18.1</title>
+    <title>Peegel Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
         .hidden { display: none !important; }
-        button:active { transform: scale(0.95); }
+        audio::-webkit-media-controls-panel { background-color: #1e293b; }
     </style>
 </head>
-<body class="p-6 min-h-screen flex flex-col items-center">
-
-    <div class="w-full max-w-md space-y-6">
-        <div class="flex justify-between items-center mb-4">
-            <h1 class="text-xl font-bold tracking-tighter text-blue-500 uppercase italic">Peegel</h1>
-            <div id="clock" class="text-2xl font-bold text-yellow-500 tracking-tighter">00:00:00</div>
+<body class="p-4 min-h-screen flex flex-col items-center">
+    <div class="w-full max-w-md space-y-4">
+        
+        <div class="flex justify-between items-center p-2">
+            <h1 class="text-xl font-black text-blue-500 italic tracking-tighter uppercase">Peegel</h1>
+            <div id="clock" class="text-2xl font-mono text-yellow-500">00:00:00</div>
         </div>
 
-        <div id="mic-section" class="hidden space-y-6">
-            <div class="glass rounded-[40px] p-8 space-y-6 shadow-2xl">
+        <div id="active-session" class="hidden space-y-4">
+            <div class="glass rounded-[35px] p-6 shadow-2xl space-y-4 border-t border-blue-500/20">
                 <div class="flex justify-between items-center">
-                    <div class="flex items-center gap-3">
-                        <div id="status-light" class="w-3 h-3 bg-slate-700 rounded-full transition-all duration-300"></div>
-                        <div class="w-32 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                            <div id="mic-bar" class="h-full bg-green-400 w-0 transition-all duration-75"></div>
-                        </div>
+                    <div id="status-light" class="w-4 h-4 bg-slate-700 rounded-full transition-all duration-300"></div>
+                    <div id="hz-display" class="text-2xl font-bold text-blue-400 font-mono italic">0 Hz</div>
+                </div>
+                
+                <div class="h-2 bg-slate-900 rounded-full overflow-hidden">
+                    <div id="volume-bar" class="h-full bg-blue-500 w-0"></div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 border-t border-white/5 pt-4">
+                    <div class="text-center">
+                        <p class="text-[9px] uppercase text-slate-500 font-black mb-1">Vestlus</p>
+                        <span id="speech-time" class="text-xl font-bold text-green-400 font-mono">0.0 min</span>
                     </div>
-                    <div id="hz-val" class="text-xl font-bold text-blue-400 italic font-mono">0 Hz</div>
-                </div>
-                <div class="grid grid-cols-2 gap-4 text-center border-t border-white/5 pt-4">
-                    <div><p class="text-[9px] text-slate-500 uppercase font-bold">Kõne</p><span id="s-val" class="text-lg font-bold text-green-400">0s</span></div>
-                    <div><p class="text-[9px] text-slate-500 uppercase font-bold">Vaikus</p><span id="v-val" class="text-lg font-bold text-slate-500">0s</span></div>
-                </div>
-            </div>
-
-            <div class="space-y-3">
-                <button id="toggleNoteBtn" class="w-full py-4 rounded-3xl border border-white/10 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 bg-white/5 transition-all">
-                    + Lisa märge
-                </button>
-                <div id="note-container" class="hidden glass rounded-[30px] p-4 shadow-inner">
-                    <textarea id="session-note" class="w-full bg-transparent p-2 text-sm text-slate-200 focus:outline-none placeholder-slate-700 resize-none" placeholder="Kirjuta siia..." rows="2"></textarea>
+                    <div class="text-center border-l border-white/5">
+                        <p class="text-[9px] uppercase text-slate-500 font-black mb-1">Vaikus</p>
+                        <span id="silence-time" class="text-xl font-bold text-slate-400 font-mono">0.0 min</span>
+                    </div>
                 </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
-                <button id="fixBtn" class="bg-blue-600 text-white py-6 rounded-[30px] font-black uppercase text-xs tracking-[0.2em] shadow-lg">Fikseeri</button>
-                <button id="stopBtn" class="bg-red-900/40 text-red-500 py-6 rounded-[30px] font-black uppercase text-xs tracking-[0.2em]">Lõpeta</button>
+            <div class="glass rounded-[25px] p-4 shadow-inner">
+                <textarea id="note-input" class="w-full bg-transparent text-sm text-slate-200 focus:outline-none placeholder-slate-700 resize-none font-medium" placeholder="Kirjuta siia märge..." rows="3"></textarea>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <button id="manual-fix" class="bg-blue-600 text-white py-5 rounded-[25px] font-black uppercase text-xs tracking-widest active:scale-95 shadow-lg">Fikseeri</button>
+                <button id="stop-session" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-black uppercase text-xs tracking-widest active:scale-95">Lõpeta</button>
             </div>
         </div>
 
-        <div id="start-section" class="flex flex-col items-center pt-10">
-            <button id="startBtn" class="bg-blue-600 text-white px-16 py-8 rounded-[40px] font-black uppercase tracking-widest shadow-2xl shadow-blue-900/40 text-xl">
-                Alusta
-            </button>
+        <div id="setup-screen" class="pt-20 flex flex-col items-center space-y-8 text-center">
+            <button id="start-btn" class="bg-blue-600 w-36 h-36 rounded-full font-black text-2xl text-white shadow-2xl shadow-blue-500/20 active:scale-90 border-4 border-blue-400">START</button>
+            <p class="text-slate-600 text-[10px] uppercase font-bold tracking-[0.2em]">Salvestab 10 min sessioonidena</p>
         </div>
 
-        <div class="pt-10 w-full">
-            <p class="text-[10px] text-slate-600 font-black uppercase tracking-[0.3em] mb-6 text-center italic">Uurimuse ajalugu</p>
-            <div id="history-list" class="space-y-4 pb-24"></div>
+        <div class="w-full space-y-4 pt-4">
+            <h3 class="text-[10px] font-black uppercase tracking-[0.4em] text-slate-700 text-center italic">Sessioonide logi</h3>
+            <div id="history-container" class="space-y-4 pb-24"></div>
         </div>
     </div>
-
     <script src="script.js"></script>
 </body>
 </html>
