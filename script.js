@@ -1,13 +1,12 @@
 const VOLUME_THRESHOLD = 3.8; 
 const MIN_HZ = 80;            
-const AUTO_FIX_MS = 600000; // 10 minutit (10 * 60 * 1000)
+const AUTO_FIX_MS = 600000; // 10 minutit
 
 let isLive = false, speechMs = 0, silenceMs = 0, db, stream = null;
 let audioCtx = null, processor = null, source = null, speechBuffer = [];
 let hzMin = Infinity, hzMax = 0, sessionStartTime = "";
 let autoFixTimer = null;
 
-// ABI: Vormindame alati minutid ja sekundid (nt 0m 5s)
 function formatTime(ms) {
     const totalSeconds = Math.round(ms / 1000);
     const m = Math.floor(totalSeconds / 60);
@@ -20,7 +19,7 @@ setInterval(() => {
     if(c) c.innerText = new Date().toLocaleTimeString('et-EE'); 
 }, 1000);
 
-const dbReq = indexedDB.open("Peegel_Final_V53", 1);
+const dbReq = indexedDB.open("Peegel_Final_V54", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
@@ -64,23 +63,26 @@ async function startSession() {
             document.getElementById('speech-sec').innerText = formatTime(speechMs);
             document.getElementById('silence-sec').innerText = formatTime(silenceMs);
         };
-
         document.getElementById('setup-screen').classList.add('hidden');
         document.getElementById('active-session').classList.remove('hidden');
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
         isLive = true;
-
-        // Käivitame 10-minuti automaatse salvestamise taimeri
         autoFixTimer = setInterval(fixSession, AUTO_FIX_MS);
-
     } catch (err) { alert("Viga mikkriga!"); }
 }
 
-// UUS: Funktsioon lõpetamiseks nii, et andmed salvestatakse
 async function stopAndSave() {
+    if (!isLive) return;
+    isLive = false;
+    clearInterval(autoFixTimer);
+    
+    // Kui puhvris on andmeid, salvestame enne sulgemist
     if (speechBuffer.length > 0) {
         await fixSession();
     }
+    
+    // Sulgeme mikkri tracks
+    if (stream) stream.getTracks().forEach(t => t.stop());
     location.reload();
 }
 
@@ -91,18 +93,16 @@ async function fixSession() {
     const snapStats = { min: hzMin, max: hzMax, s: speechMs, v: silenceMs };
     const currentSpeech = [...speechBuffer], currentSR = audioCtx.sampleRate;
     
-    // Reset andmed uue lõigu jaoks
     speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
-    sessionStartTime = new Date().toLocaleTimeString('et-EE');
-    // Tekstivälja puhastame ainult siis, kui tegu pole 10-minuti automaatikaga
-    // Aga sinu soovil - puhastame alati, et uus märgistus algaks
     document.getElementById('note-input').value = "";
+    sessionStartTime = new Date().toLocaleTimeString('et-EE');
 
     const cleanWav = bufferToWav(currentSpeech, currentSR);
     const cleanBase = await toB64(cleanWav);
     const tx = db.transaction("sessions", "readwrite");
     tx.objectStore("sessions").add({
         id: Date.now(), start: snapStart, end: snapEnd,
+        date: new Date().toLocaleDateString('et-EE'), // Failinime jaoks
         hzMin: snapStats.min, hzMax: snapStats.max,
         note: snapNote, audioClean: cleanBase,
         sMs: snapStats.s, vMs: snapStats.v
@@ -139,11 +139,14 @@ function renderHistory() {
     tx.objectStore("sessions").getAll().onsuccess = e => {
         const list = e.target.result.sort((a,b) => b.id - a.id);
         document.getElementById('history-container').innerHTML = list.map(s => {
-            const notePreview = s.note ? s.note.substring(0, 15).replace(/[^a-z0-9]/gi, '_') : 'Sessioon_' + s.id;
+            // Failinime loomine: Kuupäev_Kell_Märge
+            const cleanNote = s.note ? s.note.substring(0, 15).replace(/[^a-z0-9]/gi, '_') : 'Sessioon';
+            const fileName = `${s.date}_${s.start.replace(/:/g, '-')}_${cleanNote}`;
+            
             return `
             <div class="glass rounded-[30px] p-5 space-y-4 shadow-xl border border-white/5 text-left">
-                <div class="flex justify-between items-center text-[11px] uppercase tracking-tight">
-                    <span class="flex gap-2 items-center font-bold">
+                <div class="flex justify-between items-center text-[11px] uppercase tracking-tight font-bold">
+                    <span class="flex gap-2 items-center">
                         <span style="color: #22c55e;">${s.start}-${s.end}</span>
                         <span style="color: #334155;">|</span>
                         <span style="color: #3b82f6;">${s.hzMin}-${s.hzMax} <span style="color: #67e8f9; font-weight: 400;">HZ</span></span>
@@ -155,7 +158,7 @@ function renderHistory() {
                 <div class="p-4 bg-blue-500/5 rounded-2xl space-y-3 border border-blue-500/10">
                     <div class="flex justify-between items-center text-[9px] font-black text-blue-400 uppercase tracking-widest">
                         <span>Puhas vestlus (${formatTime(s.sMs)})</span>
-                        <button onclick="dl('${s.audioClean}', '${notePreview}')" class="text-blue-400 border border-blue-400/20 px-2 py-0.5 rounded">Download</button>
+                        <button onclick="dl('${s.audioClean}', '${fileName}')" class="text-blue-400 border border-blue-400/20 px-2 py-0.5 rounded">Download</button>
                     </div>
                     <audio src="${s.audioClean}" controls preload="metadata"></audio>
                 </div>
