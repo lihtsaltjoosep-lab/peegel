@@ -1,104 +1,107 @@
-let isLive = false, speechMs = 0, silenceMs = 0, db, stream, wakeLock = null;
-let rawRecorder, audioCtx, processor, source, speechBuffer = [];
+let isLive = false, speechMs = 0, silenceMs = 0, db, stream = null, wakeLock = null;
+let rawRecorder = null, audioCtx = null, processor = null, source = null, speechBuffer = [];
 let rawChunks = [], hzMin = Infinity, hzMax = 0, sessionStartTime = "";
 
-// 1. KELL (Oranž, õhuke)
+// 1. KELL (Oranž)
 setInterval(() => { 
     const clock = document.getElementById('clock');
     if(clock) clock.innerText = new Date().toLocaleTimeString('et-EE'); 
 }, 1000);
 
-// 2. ANDMEBAAS
-const dbReq = indexedDB.open("Peegel_Pro_V40", 1);
+// 2. ANDMEBAAS (Uus nimi V41, et vältida vanu vigu)
+const dbReq = indexedDB.open("Peegel_Pro_V41", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
-// 3. START (Käivitub vaid üks kord sessiooni alguses)
+// 3. START (Nüüd lollikindel)
 document.getElementById('start-btn').onclick = async () => {
-    document.getElementById('setup-screen').classList.add('hidden');
-    document.getElementById('active-session').classList.remove('hidden');
-    
     try {
         if (!stream) {
             stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         }
+        
+        document.getElementById('setup-screen').classList.add('hidden');
+        document.getElementById('active-session').classList.remove('hidden');
+        
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            source = audioCtx.createMediaStreamSource(stream);
+            const analyser = audioCtx.createAnalyser();
+            processor = audioCtx.createScriptProcessor(4096, 1, 1);
+
+            source.connect(analyser);
+            analyser.connect(processor);
+            processor.connect(audioCtx.destination);
+
+            processor.onaudioprocess = (e) => {
+                if (!isLive) return;
+                const inputData = e.inputBuffer.getChannelData(0);
+                const data = new Uint8Array(analyser.frequencyBinCount);
+                analyser.getByteFrequencyData(data);
+                
+                const vol = data.reduce((a,b) => a+b) / data.length;
+                let maxVal = -1, maxIdx = -1;
+                for (let i = 0; i < data.length/2; i++) { if (data[i] > maxVal) { maxVal = data[i]; maxIdx = i; } }
+                const hz = Math.round(maxIdx * (audioCtx.sampleRate/2) / (data.length/2));
+                
+                if (hz > 40 && hz < 2000) {
+                    if (hz < hzMin) hzMin = hz; if (hz > hzMax) hzMax = hz;
+                    document.getElementById('hz-min-val').innerText = hzMin;
+                    document.getElementById('hz-max-val').innerText = hzMax;
+                }
+
+                const isSpeaking = vol > 2.5 && hz > 50;
+                if (isSpeaking) {
+                    speechMs += (4096 / audioCtx.sampleRate) * 1000;
+                    document.getElementById('status-light').style.background = "#22c55e";
+                    speechBuffer.push(new Float32Array(inputData));
+                } else {
+                    silenceMs += (4096 / audioCtx.sampleRate) * 1000;
+                    document.getElementById('status-light').style.background = "#334155";
+                }
+                
+                document.getElementById('speech-sec').innerText = Math.round(speechMs/1000) + "s";
+                document.getElementById('silence-sec').innerText = Math.round(silenceMs/1000) + "s";
+            };
+        }
+
+        if (!rawRecorder || rawRecorder.state === "inactive") {
+            rawRecorder = new MediaRecorder(stream);
+            rawRecorder.ondataavailable = e => { if (e.data.size > 0) rawChunks.push(e.data); };
+            rawRecorder.start();
+        }
+
         if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
         
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        source = audioCtx.createMediaStreamSource(stream);
-        const analyser = audioCtx.createAnalyser();
-        processor = audioCtx.createScriptProcessor(4096, 1, 1);
-
-        source.connect(analyser);
-        analyser.connect(processor);
-        processor.connect(audioCtx.destination);
-
-        rawRecorder = new MediaRecorder(stream);
-        rawRecorder.ondataavailable = e => { if (e.data.size > 0) rawChunks.push(e.data); };
-
-        processor.onaudioprocess = (e) => {
-            if (!isLive) return;
-            const inputData = e.inputBuffer.getChannelData(0);
-            const data = new Uint8Array(analyser.frequencyBinCount);
-            analyser.getByteFrequencyData(data);
-            
-            const vol = data.reduce((a,b) => a+b) / data.length;
-            let maxVal = -1, maxIdx = -1;
-            for (let i = 0; i < data.length/2; i++) { if (data[i] > maxVal) { maxVal = data[i]; maxIdx = i; } }
-            const hz = Math.round(maxIdx * (audioCtx.sampleRate/2) / (data.length/2));
-            
-            if (hz > 40 && hz < 2000) {
-                if (hz < hzMin) hzMin = hz; if (hz > hzMax) hzMax = hz;
-                document.getElementById('hz-min-val').innerText = hzMin;
-                document.getElementById('hz-max-val').innerText = hzMax;
-            }
-
-            const isSpeaking = vol > 2.5 && hz > 50;
-            if (isSpeaking) {
-                speechMs += (4096 / audioCtx.sampleRate) * 1000;
-                document.getElementById('status-light').style.background = "#22c55e";
-                speechBuffer.push(new Float32Array(inputData));
-            } else {
-                silenceMs += (4096 / audioCtx.sampleRate) * 1000;
-                document.getElementById('status-light').style.background = "#334155";
-            }
-            
-            document.getElementById('speech-sec').innerText = Math.round(speechMs/1000) + "s";
-            document.getElementById('silence-sec').innerText = Math.round(silenceMs/1000) + "s";
-        };
-
-        rawRecorder.start();
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
         isLive = true;
-    } catch (err) { alert("Viga mikkriga!"); }
+    } catch (err) { 
+        alert("Mikrofoni luba puudub või viga: " + err); 
+    }
 };
 
-// 4. FIKSEERI (Ei sulge mootorit, vaid tühjendab puhvri)
+// 4. FIKSEERI (Võimaldab mitu sessiooni järjest)
 async function fixSession() {
     if (!isLive) return;
     
-    // Võtame andmetest koopia
+    // Pildistame hetke andmed
     const snapNote = document.getElementById('note-input').value;
     const snapStart = sessionStartTime;
     const snapEnd = new Date().toLocaleTimeString('et-EE');
     const snapStats = { min: hzMin, max: hzMax, s: speechMs, v: silenceMs };
     const currentSpeechBuffer = [...speechBuffer];
     const currentRawChunks = [...rawChunks];
-    const currentSampleRate = audioCtx.sampleRate;
+    const currentSR = audioCtx.sampleRate;
 
-    // TÜHJENDAME PUHVRID KOHE (et uus sessioon saaks alata samal ajal kui salvestame)
-    speechBuffer = [];
-    rawChunks = [];
-    speechMs = 0;
-    silenceMs = 0;
-    hzMin = Infinity;
-    hzMax = 0;
+    // NULLIME NÄIDIKUD KOHE
+    speechBuffer = []; rawChunks = [];
+    speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
     document.getElementById('note-input').value = "";
     sessionStartTime = new Date().toLocaleTimeString('et-EE');
 
-    // Salvestame andmebaasi taustal
+    // Andmebaasi salvestamine taustal
     const fullBlob = new Blob(currentRawChunks, { type: 'audio/webm' });
-    const cleanWavBlob = bufferToWav(currentSpeechBuffer, currentSampleRate);
+    const cleanWavBlob = bufferToWav(currentSpeechBuffer, currentSR);
 
     const fullBase = await toB64(fullBlob);
     const cleanBase = await toB64(cleanWavBlob);
@@ -111,11 +114,13 @@ async function fixSession() {
         s: Math.round(snapStats.s/1000), v: Math.round(snapStats.v/1000)
     });
 
-    tx.oncomplete = () => { renderHistory(); };
+    tx.oncomplete = () => renderHistory();
     
-    // Restartime MediaRecorderi (Toore faili jaoks)
-    rawRecorder.stop();
-    rawRecorder.start();
+    // Restartime toore faili lindistaja, et failid ei kattuks
+    if (rawRecorder && rawRecorder.state !== "inactive") {
+        rawRecorder.stop();
+        rawRecorder.start();
+    }
 }
 
 function bufferToWav(chunks, sampleRate) {
@@ -143,4 +148,12 @@ function bufferToWav(chunks, sampleRate) {
     return new Blob([buffer], { type: 'audio/wav' });
 }
 
-function
+function toB64(b) { return new Promise(r => { const f = new FileReader(); f.onloadend = () => r(f.result); f.readAsDataURL(b); }); }
+
+function renderHistory() {
+    if(!db) return;
+    const tx = db.transaction("sessions", "readonly");
+    tx.objectStore("sessions").getAll().onsuccess = e => {
+        const list = e.target.result.sort((a,b) => b.id - a.id);
+        document.getElementById('history-container').innerHTML = list.map(s => `
+            <div class="glass rounded-[30px] p-5 space-y
