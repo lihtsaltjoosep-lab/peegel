@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Peegel Pro v58</title>
+    <title>Peegel Pro v59</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -34,8 +34,8 @@
                             <span class="text-blue-400">P:<span id="silence-sec">0m 0s</span></span>
                         </div>
                     </div>
-                    <div class="flex gap-2 font-mono text-[12px] uppercase font-bold text-cyan-300">
-                        Hz <span id="hz-min-val" class="text-blue-500">0</span>
+                    <div class="flex gap-2 font-mono text-[12px] uppercase font-bold">
+                        <span class="text-cyan-300">Hz <span id="hz-min-val" class="text-blue-500">0</span></span>
                         <span class="text-red-500"><span id="hz-max-val">0</span></span>
                     </div>
                 </div>
@@ -43,13 +43,13 @@
             </div>
             <div class="grid grid-cols-2 gap-3">
                 <button onclick="fixSession()" class="bg-blue-600 text-white py-5 rounded-[25px] font-black uppercase text-xs tracking-widest active:scale-95 shadow-lg">Fikseeri</button>
-                <button onclick="stopAndSave()" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-black uppercase text-xs active:scale-95">Lõpeta</button>
+                <button id="stop-btn" onclick="stopAndSave()" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-black uppercase text-xs active:scale-95">Lõpeta</button>
             </div>
         </div>
 
         <div class="w-full space-y-4 pt-4 pb-24 text-center">
             <h3 class="text-[10px] font-black uppercase tracking-[0.4em] text-slate-700 italic">Sessioonide logi</h3>
-            <div id="history-container" class="space-y-4 mt-4"></div>
+            <div id="history-container" class="space-y-4 mt-4 text-left"></div>
         </div>
     </div>
     <script src="script.js"></script>
