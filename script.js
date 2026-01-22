@@ -5,18 +5,23 @@ let isLive = false, speechMs = 0, silenceMs = 0, db, stream = null;
 let audioCtx = null, processor = null, source = null, speechBuffer = [];
 let hzMin = Infinity, hzMax = 0, sessionStartTime = "";
 
-// 1. KELL
+// ABI: Sekundid minutiteks (nt 75s -> 1m 15s)
+function formatTime(ms) {
+    const totalSeconds = Math.round(ms / 1000);
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
 setInterval(() => { 
     const c = document.getElementById('clock');
     if(c) c.innerText = new Date().toLocaleTimeString('et-EE'); 
 }, 1000);
 
-// 2. ANDMEBAAS
 const dbReq = indexedDB.open("Peegel_Final_V52", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
-// 3. START
 async function startSession() {
     try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -54,8 +59,9 @@ async function startSession() {
                 silenceMs += (4096 / audioCtx.sampleRate) * 1000;
                 document.getElementById('status-light').style.background = "#334155";
             }
-            document.getElementById('speech-sec').innerText = Math.round(speechMs/1000) + "s";
-            document.getElementById('silence-sec').innerText = Math.round(silenceMs/1000) + "s";
+            // Kuvamine minutites/sekundites monitoril
+            document.getElementById('speech-sec').innerText = formatTime(speechMs);
+            document.getElementById('silence-sec').innerText = formatTime(silenceMs);
         };
         document.getElementById('setup-screen').classList.add('hidden');
         document.getElementById('active-session').classList.remove('hidden');
@@ -64,7 +70,6 @@ async function startSession() {
     } catch (err) { alert("Viga mikkriga!"); }
 }
 
-// 4. FIKSEERI
 async function fixSession() {
     if (!isLive || speechBuffer.length === 0) return;
     const snapNote = document.getElementById('note-input').value;
@@ -81,7 +86,7 @@ async function fixSession() {
         id: Date.now(), start: snapStart, end: snapEnd,
         hzMin: snapStats.min, hzMax: snapStats.max,
         note: snapNote, audioClean: cleanBase,
-        s: Math.round(snapStats.s/1000), v: Math.round(snapStats.v/1000)
+        sMs: snapStats.s, vMs: snapStats.v // Salvestame millisekundid täpseks arvutuseks
     });
     tx.oncomplete = () => { renderHistory(); };
 }
@@ -109,7 +114,6 @@ function bufferToWav(chunks, sampleRate) {
 
 function toB64(b) { return new Promise(r => { const f = new FileReader(); f.onloadend = () => r(f.result); f.readAsDataURL(b); }); }
 
-// 5. LOGI RENDERDAMINE
 function renderHistory() {
     if(!db) return;
     const tx = db.transaction("sessions", "readonly");
@@ -123,14 +127,14 @@ function renderHistory() {
                         <span class="text-divider" style="color: #334155;">|</span>
                         <span style="color: #3b82f6;">${s.hzMin}-${s.hzMax} HZ</span>
                         <span class="text-divider" style="color: #334155;">|</span>
-                        <span style="color: #f59e0b;">P:${s.v}s</span>
+                        <span style="color: #f59e0b;">P:${formatTime(s.vMs)}</span>
                     </span>
                     <button onclick="delS(${s.id})" class="btn-delete-dark" style="color: #991b1b; font-weight: 800;">KUSTUTA</button>
                 </div>
                 
                 <div class="p-4 bg-blue-500/5 rounded-2xl space-y-3 border border-blue-500/10">
                     <div class="flex justify-between items-center text-[9px] font-black text-blue-400 uppercase tracking-widest">
-                        <span>Puhas vestlus (${s.s}s)</span>
+                        <span>Puhas vestlus (${formatTime(s.sMs)})</span>
                         <button onclick="dl('${s.audioClean}', 'Puhas_${s.id}')" class="text-blue-400 border border-blue-400/20 px-2 py-0.5 rounded">Download</button>
                     </div>
                     <audio src="${s.audioClean}" controls preload="metadata"></audio>
