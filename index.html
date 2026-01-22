@@ -6,42 +6,73 @@
     <title>Peegel Pro v33</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
-        .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
+        body { 
+            background-color: #020617; 
+            color: #e2e8f0; 
+            font-family: sans-serif; 
+            -webkit-tap-highlight-color: transparent; 
+        }
+        .glass { 
+            background: rgba(30, 41, 59, 0.4); 
+            backdrop-filter: blur(10px); 
+            border: 1px solid rgba(255,255,255,0.05); 
+        }
         .hidden { display: none !important; }
-        audio { height: 35px; width: 100%; border-radius: 12px; filter: invert(1) hue-rotate(180deg) brightness(1.2); }
         
-        /* Kell: Oranž ja õhuke */
-        #clock { color: #f59e0b; font-weight: 300; }
+        /* Audio pleierite stiil */
+        audio { 
+            height: 35px; 
+            width: 100%; 
+            border-radius: 12px; 
+            filter: invert(1) hue-rotate(180deg) brightness(1.2); 
+        }
         
-        /* Logi värvid */
-        .text-fix-orange { color: #f59e0b; } 
-        .text-hz-blue { color: #3b82f6; }   
-        .text-silence-red { color: #ef4444; font-weight: 700; } 
-        .text-divider { color: #475569; }
-        .btn-delete-dark { color: #b91c1c; font-weight: 800; } 
+        /* Kell: Oranžikas, õhuke ja suur */
+        #clock { 
+            color: #f59e0b; 
+            font-weight: 200; 
+            letter-spacing: -0.02em;
+        }
+        
+        /* Logi värvide reeglid */
+        .text-fix-orange { color: #f59e0b; }        /* Oranž aeg */
+        .text-hz-blue { color: #3b82f6; }          /* Sinine Hz */
+        .text-silence-red { color: #ef4444; }       /* Punane vaikus */
+        .text-divider { color: #475569; }           /* Hallid kriipsud */
+        .btn-delete-dark { 
+            color: #991b1b; 
+            font-weight: 800; 
+            letter-spacing: 0.05em;
+        }
     </style>
 </head>
 <body class="p-4 min-h-screen flex flex-col items-center">
     <div class="w-full max-w-md space-y-4">
         
-        <div class="flex justify-between items-center p-2">
-            <h1 class="text-xl font-black text-blue-500 italic uppercase">Peegel</h1>
-            <div id="clock" class="text-3xl font-light tracking-tighter text-right">00:00:00</div>
+        <div class="flex justify-between items-end p-2 pb-4">
+            <h1 class="text-xl font-black text-blue-600 italic uppercase leading-none">Peegel</h1>
+            <div id="clock" class="text-4xl leading-none">00:00:00</div>
         </div>
 
         <div id="active-session" class="hidden space-y-4">
             <div class="glass rounded-[35px] p-6 shadow-2xl space-y-4 border-t border-blue-500/20">
                 <div class="flex justify-between items-center">
-                    <div id="status-light" class="w-4 h-4 bg-slate-700 rounded-full"></div>
-                    <div class="flex gap-4 font-mono text-[10px] uppercase">
-                        <span class="text-hz-blue">Min: <span id="hz-min-val">0</span></span>
-                        <span class="text-hz-blue">Max: <span id="hz-max-val">0</span></span>
+                    <div id="status-light" class="w-4 h-4 bg-slate-700 rounded-full transition-all duration-300"></div>
+                    <div class="flex gap-4 font-mono text-[10px] uppercase tracking-wider">
+                        <span class="text-hz-blue">Min: <span id="hz-min-val">0</span> Hz</span>
+                        <span class="text-hz-blue">Max: <span id="hz-max-val">0</span> Hz</span>
                     </div>
                 </div>
+                
                 <div class="grid grid-cols-2 gap-4 text-center border-t border-white/5 pt-4">
-                    <div><p class="text-[9px] uppercase text-slate-500 font-black">Vestlus</p><span id="speech-sec" class="text-xl font-bold text-green-400 font-mono">0s</span></div>
-                    <div><p class="text-[9px] uppercase text-slate-500 font-black">Vaikus</p><span id="silence-sec" class="text-xl font-bold text-slate-400 font-mono">0s</span></div>
+                    <div>
+                        <p class="text-[9px] uppercase text-slate-500 font-black mb-1">Vestlus</p>
+                        <span id="speech-sec" class="text-xl font-bold text-green-400 font-mono">0s</span>
+                    </div>
+                    <div>
+                        <p class="text-[9px] uppercase text-slate-500 font-black mb-1">Vaikus</p>
+                        <span id="silence-sec" class="text-xl font-bold text-slate-400 font-mono">0s</span>
+                    </div>
                 </div>
             </div>
 
@@ -50,20 +81,22 @@
             </div>
 
             <div class="grid grid-cols-2 gap-3">
-                <button id="manual-fix" class="bg-blue-600 text-white py-5 rounded-[25px] font-black uppercase text-xs tracking-widest shadow-lg">Fikseeri</button>
-                <button id="stop-session" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-black uppercase text-xs">Lõpeta</button>
+                <button id="manual-fix" class="bg-blue-600 text-white py-5 rounded-[25px] font-black uppercase text-xs tracking-widest active:scale-95 shadow-lg">Fikseeri</button>
+                <button id="stop-session" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-black uppercase text-xs active:scale-95">Lõpeta</button>
             </div>
         </div>
 
         <div id="setup-screen" class="pt-20 flex flex-col items-center">
-            <button id="start-btn" class="bg-blue-600 w-36 h-36 rounded-full font-black text-2xl text-white shadow-2xl active:scale-90 border-4 border-blue-400">START</button>
+            <button id="start-btn" class="bg-blue-600 w-36 h-36 rounded-full font-black text-2xl text-white shadow-2xl shadow-blue-900/20 active:scale-90 border-4 border-blue-400">START</button>
         </div>
 
         <div class="w-full space-y-4 pt-4 pb-24">
-            <h3 class="text-[10px] font-black uppercase tracking-[0.4em] text-slate-700 text-center italic">Logi</h3>
-            <div id="history-container" class="space-y-4"></div>
+            <h3 class="text-[10px] font-black uppercase tracking-[0.4em] text-slate-700 text-center italic">Sessioonide logi</h3>
+            <div id="history-container" class="space-y-4">
+                </div>
         </div>
     </div>
+
     <script src="script.js"></script>
 </body>
 </html>
