@@ -8,7 +8,7 @@ setInterval(() => {
     if(clock) clock.innerText = new Date().toLocaleTimeString('et-EE'); 
 }, 1000);
 
-const dbReq = indexedDB.open("Peegel_V31_PostProcess", 1);
+const dbReq = indexedDB.open("Peegel_V32_DB", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
@@ -71,15 +71,10 @@ async function fixSession(callback) {
     const snapNote = document.getElementById('note-input').value;
     const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
     const snapStats = { min: hzMin, max: hzMax, s: speechMs, v: silenceMs };
-    const snapChunks = [...chunks], snapMap = [...speechMap];
+    const snapChunks = [...chunks];
+    const snapMap = [...speechMap];
 
     mediaRecorder.onstop = async () => {
-        // RESET
-        chunks = []; speechMap = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
-        sessionStartTime = new Date().toLocaleTimeString('et-EE');
-        document.getElementById('note-input').value = "";
-        if (isLive) mediaRecorder.start(200);
-
         const fullBlob = new Blob(snapChunks.map(c => c.blob), { type: 'audio/webm' });
         const fullBase = await toB64(fullBlob);
 
@@ -87,39 +82,42 @@ async function fixSession(callback) {
         tx.objectStore("sessions").add({
             id: Date.now(), start: snapStart, end: snapEnd,
             hzMin: snapStats.min, hzMax: snapStats.max,
-            note: snapNote, audioFull: fullBase, audioClean: null, // Clean on alguses null
+            note: snapNote, audioFull: fullBase, audioClean: null,
             s: Math.round(snapStats.s/1000), v: Math.round(snapStats.v/1000),
-            rawChunks: snapChunks, rawMap: snapMap // Hoiame andmed töötluseks alles
+            rawChunks: snapChunks, rawMap: snapMap 
         });
-        tx.oncomplete = () => { renderHistory(); if (callback) callback(); };
+
+        tx.oncomplete = () => {
+            renderHistory();
+            chunks = []; speechMap = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
+            document.getElementById('note-input').value = "";
+            sessionStartTime = new Date().toLocaleTimeString('et-EE');
+            if (isLive) mediaRecorder.start(200);
+            if (callback) callback();
+        };
     };
     mediaRecorder.stop();
 }
 
-// NUTIKAS LÕIKAMINE NUPU VAJUTUSEL
 async function processSilence(id) {
     const btn = document.getElementById(`proc-btn-${id}`);
-    btn.innerText = "Töötlen...";
-    btn.disabled = true;
-
+    btn.innerText = "Lõikan...";
+    
     const tx = db.transaction("sessions", "readwrite");
     const store = tx.objectStore("sessions");
     
     store.get(id).onsuccess = async (e) => {
         const s = e.target.result;
-        
-        // Me loome füüsiliselt uue faili ainult nendest tükkidest, mis on kõne
         const cleanBlobs = s.rawChunks.filter(c => {
-            return s.rawMap.some(m => m.s && Math.abs(m.t - c.t) < 1200);
+            return s.rawMap.some(m => m.s && Math.abs(m.t - c.t) < 1500);
         }).map(c => c.blob);
 
         if (cleanBlobs.length > 0) {
             const cleanBlob = new Blob(cleanBlobs, { type: 'audio/webm' });
             s.audioClean = await toB64(cleanBlob);
-            store.put(s); // Salvestame uuendatud sessiooni
+            store.put(s);
         }
-        
-        tx.oncomplete = () => { renderHistory(); };
+        tx.oncomplete = () => renderHistory();
     };
 }
 
@@ -134,22 +132,22 @@ function renderHistory() {
             <div class="glass rounded-[30px] p-5 space-y-4 shadow-xl border border-white/5">
                 <div class="flex justify-between text-[10px] font-bold uppercase">
                     <span>
-                        <span class="text-time-green">${s.start}-${s.end}</span>
+                        <span class="text-fix-orange">${s.start}-${s.end}</span>
                         <span class="text-divider"> | </span>
-                        <span class="text-hz-dim-cyan">${s.hzMin}-${s.hzMax} Hz</span>
+                        <span class="text-hz-blue">${s.hzMin}-${s.hzMax} Hz</span>
                         <span class="text-divider"> | </span>
-                        <span class="text-silence-bright-red">V: ${s.v}s</span>
+                        <span class="text-silence-red">V: ${s.v}s</span>
                     </span>
-                    <button onclick="delS(${s.id})" class="btn-delete-hot">KUSTUTA</button>
+                    <button onclick="delS(${s.id})" class="btn-delete-dark">KUSTUTA</button>
                 </div>
                 
                 <div class="p-4 bg-green-500/5 rounded-2xl space-y-3 border border-green-500/10">
                     <div class="flex justify-between items-center text-[9px] font-black text-green-400 uppercase tracking-widest">
                         <span>Puhas vestlus (${s.s}s)</span>
                         ${s.audioClean ? `
-                            <button onclick="dl('${s.audioClean}', 'Puhas_${s.id}')" class="text-green-400 border border-green-400/20 px-2 py-0.5 rounded">Lata .webm</button>
+                            <button onclick="dl('${s.audioClean}', 'Puhas_${s.id}')" class="text-green-400 border border-green-400/20 px-2 py-0.5 rounded">Download</button>
                         ` : `
-                            <button id="proc-btn-${s.id}" onclick="processSilence(${s.id})" class="bg-blue-600/40 text-blue-300 px-3 py-1 rounded-lg">Eemalda vaikus</button>
+                            <button id="proc-btn-${s.id}" onclick="processSilence(${s.id})" class="bg-blue-600/40 text-blue-200 px-3 py-1 rounded-lg">Eemalda vaikus</button>
                         `}
                     </div>
                     ${s.audioClean ? `<audio src="${s.audioClean}" controls preload="metadata"></audio>` : '<p class="text-[8px] text-slate-500 italic">Vajuta nuppu vaikuse eemaldamiseks</p>'}
@@ -160,7 +158,7 @@ function renderHistory() {
                     <audio src="${s.audioFull}" controls preload="metadata"></audio>
                 </div>
 
-                <button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-3 text-[10px] font-black uppercase text-yellow-500 bg-yellow-500/10 rounded-2xl">Kuva Märge</button>
+                <button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-3 text-[10px] font-black uppercase text-fix-orange bg-yellow-500/10 rounded-2xl">Kuva Märge</button>
                 <div class="hidden p-4 bg-black/40 rounded-2xl text-xs italic text-slate-300 border-l-2 border-yellow-500">${s.note || '...'}</div>
             </div>`).join('');
     };
