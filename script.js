@@ -19,7 +19,7 @@ setInterval(() => {
     if(c) c.innerText = new Date().toLocaleTimeString('et-EE'); 
 }, 1000);
 
-// Kasutame v61 andmebaasi edasi, et andmed ei kaoks
+// Kasutame v61 andmebaasi
 const dbReq = indexedDB.open("Peegel_DataCapsule_V61", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
@@ -188,13 +188,20 @@ function downloadCapsule(id) {
     };
 }
 
-// LOGI RENDERDAMINE - TAASTATUD VANA HEA DISAIN
+// LOGI RENDERDAMINE
 function renderHistory() {
     if(!db) return;
     const tx = db.transaction("sessions", "readonly");
     tx.objectStore("sessions").getAll().onsuccess = e => {
         const list = e.target.result.sort((a,b) => b.id - a.id);
-        document.getElementById('history-container').innerHTML = list.map(s => `
+        
+        const html = list.map(s => {
+            const noteHtml = s.note && s.note.trim() !== "" ? 
+                `<button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-2 text-[10px] font-black uppercase bg-blue-500/10 rounded-xl hover:bg-blue-500/20 transition-all" style="color: #3b82f6;">Kuva Märge</button>
+                 <div class="hidden p-4 bg-black/40 rounded-xl text-xs italic text-slate-300 border-l-2 border-blue-500 mt-2 whitespace-pre-wrap">${s.note}</div>` 
+                : '';
+                
+            return `
             <div class="glass rounded-[30px] p-5 mb-4 text-left">
                 <div class="flex justify-between items-center text-[11px] uppercase font-bold mb-3">
                     <span class="flex gap-2 items-center">
@@ -204,7 +211,6 @@ function renderHistory() {
                     </span>
                     <button onclick="delS(${s.id})" style="color: #991b1b; font-weight: 800;">KUSTUTA</button>
                 </div>
-                
                 <div class="p-4 bg-blue-500/5 rounded-2xl border border-blue-500/10 mb-3">
                     <div class="flex justify-between items-center text-[9px] font-black text-blue-400 uppercase mb-2">
                         <span>Pikkus: ${formatTime(s.sMs)}</span>
@@ -212,12 +218,11 @@ function renderHistory() {
                     </div>
                     <audio src="${s.audioClean}" controls preload="metadata"></audio>
                 </div>
-                
-                ${s.note && s.note.trim() !== "" ? `
-                <button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-2 text-[10px] font-black uppercase bg-blue-500/10 rounded-xl hover:bg-blue-500/20 transition-all" style="color: #3b82f6;">Kuva Märge</button>
-                <div class="hidden p-4 bg-black/40 rounded-xl text-xs italic text-slate-300 border-l-2 border-blue-500 mt-2 whitespace-pre-wrap">${s.note}</div>
-                ` : ''}
-            </div>`).join('');
+                ${noteHtml}
+            </div>`;
+        }).join('');
+        
+        document.getElementById('history-container').innerHTML = html;
     };
 }
 
