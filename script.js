@@ -19,7 +19,7 @@ setInterval(() => {
     if(c) c.innerText = new Date().toLocaleTimeString('et-EE'); 
 }, 1000);
 
-// Uus andmebaasi versioon v61
+// Kasutame v61 andmebaasi edasi, et andmed ei kaoks
 const dbReq = indexedDB.open("Peegel_DataCapsule_V61", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
@@ -133,12 +133,11 @@ function bufferToWav(chunks, sampleRate) {
 
 function toB64(b) { return new Promise(r => { const f = new FileReader(); f.onloadend = () => r(f.result); f.readAsDataURL(b); }); }
 
-// SEE ON "ANDMEKAPSLI" LOOJA
+// ALLALAADIMISE FUNKTSIOON - LOOB KAPSLI
 function downloadCapsule(id) {
     const tx = db.transaction("sessions", "readonly");
     tx.objectStore("sessions").get(id).onsuccess = (e) => {
         const s = e.target.result;
-        // See HTML sisaldab KÕIKE (Heli + Statistika + Märkmed)
         const htmlContent = `
         <!DOCTYPE html>
         <html lang="et">
@@ -165,34 +164,17 @@ function downloadCapsule(id) {
                     <h1>Peegel Andmekapsel</h1>
                     <div style="text-align:right; font-size:0.9rem; color:#94a3b8;">${s.date}<br>${s.start} - ${s.end}</div>
                 </div>
-                
                 <hr>
-
                 <div class="stats-grid">
-                    <div class="stat-box">
-                        <span class="stat-label" style="color:#22c55e">Kõne Kestvus</span>
-                        <span class="stat-value">${formatTime(s.sMs)}</span>
-                    </div>
-                    <div class="stat-box">
-                        <span class="stat-label" style="color:#f59e0b">Vaikuse Aeg</span>
-                        <span class="stat-value">${formatTime(s.vMs)}</span>
-                    </div>
-                    <div class="stat-box">
-                        <span class="stat-label" style="color:#3b82f6">Sagedus (Hz)</span>
-                        <span class="stat-value">${s.hzMin} - ${s.hzMax}</span>
-                    </div>
-                     <div class="stat-box">
-                        <span class="stat-label">Kogu Sessioon</span>
-                        <span class="stat-value">${formatTime(s.sMs + s.vMs)}</span>
-                    </div>
+                    <div class="stat-box"><span class="stat-label" style="color:#22c55e">Kõne</span><span class="stat-value">${formatTime(s.sMs)}</span></div>
+                    <div class="stat-box"><span class="stat-label" style="color:#f59e0b">Vaikus</span><span class="stat-value">${formatTime(s.vMs)}</span></div>
+                    <div class="stat-box"><span class="stat-label" style="color:#3b82f6">Sagedus</span><span class="stat-value">${s.hzMin} - ${s.hzMax} Hz</span></div>
+                     <div class="stat-box"><span class="stat-label">Kokku</span><span class="stat-value">${formatTime(s.sMs + s.vMs)}</span></div>
                 </div>
-
                 <h3>MÄRKMED</h3>
                 <div class="notes-box">${s.note ? s.note : 'Märkmed puuduvad'}</div>
-
                 <hr>
-
-                <h3>HELI SALVESTUS</h3>
+                <h3>HELI</h3>
                 <audio controls src="${s.audioClean}"></audio>
             </div>
         </body>
@@ -201,12 +183,12 @@ function downloadCapsule(id) {
         const blob = new Blob([htmlContent], { type: 'text/html' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        // Faili nimi on nüüd puhas kuupäev, ei mingeid märkmeid nimes
         link.download = `Peegel_Kapsel_${s.date}_${s.start.replace(/:/g, '-')}.html`;
         link.click();
     };
 }
 
+// LOGI RENDERDAMINE - TAASTATUD VANA HEA DISAIN
 function renderHistory() {
     if(!db) return;
     const tx = db.transaction("sessions", "readonly");
@@ -217,18 +199,24 @@ function renderHistory() {
                 <div class="flex justify-between items-center text-[11px] uppercase font-bold mb-3">
                     <span class="flex gap-2 items-center">
                         <span style="color: #22c55e;">${s.start}-${s.end}</span>
-                        <span style="color: #3b82f6;">${s.hzMin}-${s.hzMax} Hz</span>
+                        <span style="color: #3b82f6;">${s.hzMin}-${s.hzMax} HZ</span>
+                        <span style="color: #f59e0b;">P:${formatTime(s.vMs)}</span>
                     </span>
                     <button onclick="delS(${s.id})" style="color: #991b1b; font-weight: 800;">KUSTUTA</button>
                 </div>
-                <div class="p-4 bg-blue-500/5 rounded-2xl border border-blue-500/10 mb-3 flex justify-between items-center">
-                    <div class="text-[10px] uppercase font-bold text-slate-400">
-                        Märkmed: ${s.note ? s.note.substring(0, 15) + '...' : '-'}
+                
+                <div class="p-4 bg-blue-500/5 rounded-2xl border border-blue-500/10 mb-3">
+                    <div class="flex justify-between items-center text-[9px] font-black text-blue-400 uppercase mb-2">
+                        <span>Pikkus: ${formatTime(s.sMs)}</span>
+                        <button onclick="downloadCapsule(${s.id})" class="text-blue-400 border border-blue-400/20 px-2 py-1 rounded hover:bg-blue-500/10 active:scale-95 transition-all">DOWNLOAD HTML</button>
                     </div>
-                    <button onclick="downloadCapsule(${s.id})" class="bg-blue-600 text-white text-[10px] font-black uppercase px-4 py-2 rounded-full shadow-lg active:scale-95 hover:bg-blue-500">
-                        LAE ALLA KAPSEL
-                    </button>
+                    <audio src="${s.audioClean}" controls preload="metadata"></audio>
                 </div>
+                
+                ${s.note && s.note.trim() !== "" ? `
+                <button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-2 text-[10px] font-black uppercase bg-blue-500/10 rounded-xl hover:bg-blue-500/20 transition-all" style="color: #3b82f6;">Kuva Märge</button>
+                <div class="hidden p-4 bg-black/40 rounded-xl text-xs italic text-slate-300 border-l-2 border-blue-500 mt-2 whitespace-pre-wrap">${s.note}</div>
+                ` : ''}
             </div>`).join('');
     };
 }
