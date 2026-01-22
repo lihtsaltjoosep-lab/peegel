@@ -1,6 +1,8 @@
 const VOLUME_THRESHOLD = 3.8; 
 const MIN_HZ = 80;            
 const AUTO_FIX_MS = 600000; 
+// UUS REEGEL: Kõnet peab olema vähemalt 1 sekund (1000ms), et salvestada
+const MIN_SPEECH_TO_SAVE_MS = 1000; 
 
 let isLive = false, speechMs = 0, silenceMs = 0, db, stream = null;
 let audioCtx = null, processor = null, source = null, speechBuffer = [];
@@ -19,7 +21,6 @@ setInterval(() => {
     if(c) c.innerText = new Date().toLocaleTimeString('et-EE'); 
 }, 1000);
 
-// Andmebaas jääb samaks (v61), et vanad failid ei kaoks
 const dbReq = indexedDB.open("Peegel_DataCapsule_V61", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
@@ -54,15 +55,13 @@ async function startSession() {
                 document.getElementById('hz-min-val').innerText = hzMin;
                 document.getElementById('hz-max-val').innerText = hzMax;
             }
-            
-            // Siin otsustame, kas on kõne või vaikus
             if (vol > VOLUME_THRESHOLD && hz > MIN_HZ) {
                 speechMs += (4096 / audioCtx.sampleRate) * 1000;
-                document.getElementById('status-light').style.background = "#22c55e"; // Roheline
+                document.getElementById('status-light').style.background = "#22c55e";
                 speechBuffer.push(new Float32Array(inputData));
             } else {
                 silenceMs += (4096 / audioCtx.sampleRate) * 1000;
-                document.getElementById('status-light').style.background = "#334155"; // Hall
+                document.getElementById('status-light').style.background = "#334155";
             }
             document.getElementById('speech-sec').innerText = formatTime(speechMs);
             document.getElementById('silence-sec').innerText = formatTime(silenceMs);
@@ -81,7 +80,7 @@ async function stopAndSave() {
     isLive = false;
     clearInterval(autoFixTimer);
     
-    // Proovime salvestada viimast juppi
+    // Siin kutsume salvestuse välja. Kui on liiga lühike, siis fixSession viskab minema.
     await fixSession();
     
     if (stream) stream.getTracks().forEach(t => t.stop());
@@ -90,28 +89,26 @@ async function stopAndSave() {
 
 function fixSession() {
     return new Promise((resolve) => {
-        // --- UUS KONTROLL v64 ---
-        // Kui kõne pikkus (speechMs) on 0 või puhver tühi, siis ÄRA SALVESTA.
-        // Lihtsalt puhastame muutujad ja lahkume.
-        if (speechMs === 0 || speechBuffer.length === 0) {
+        // --- PARANDATUD KONTROLL v65 ---
+        // Kui kasulikku juttu (speechMs) on vähem kui 1 sekund, siis viska prügikasti.
+        // See välistab kogemata tehtud klõpsud ja tühjuse.
+        if (speechMs < MIN_SPEECH_TO_SAVE_MS || speechBuffer.length === 0) {
+            console.log("Sessioon oli liiga lühike või tühi - ei salvesta.");
             speechBuffer = [];
             speechMs = 0;
             silenceMs = 0;
             hzMin = Infinity; 
             hzMax = 0;
-            // Kui kasutaja kirjutas märkme aga ei rääkinud, tühjendame ka selle, 
-            // sest pole heli, millega seda siduda.
             document.getElementById('note-input').value = ""; 
-            return resolve(); // Lahkume siit funktsioonist kohe
+            return resolve(); // Lahkume kohe
         }
-        // -------------------------
+        // -------------------------------
 
         const snapNote = document.getElementById('note-input').value;
         const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
         const snapStats = { min: hzMin, max: hzMax, s: speechMs, v: silenceMs };
         const currentSpeech = [...speechBuffer], currentSR = audioCtx.sampleRate;
         
-        // Nullime loendurid järgmise tsükli jaoks
         speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
         document.getElementById('note-input').value = "";
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
@@ -207,7 +204,6 @@ function downloadCapsule(id) {
     };
 }
 
-// WAV faili allalaadimine
 function downloadRawWav(audioData, id) {
     const link = document.createElement('a');
     link.href = audioData;
