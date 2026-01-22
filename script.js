@@ -1,5 +1,5 @@
 let isLive = false, speechMs = 0, silenceMs = 0, db, stream, mediaRecorder, wakeLock = null;
-let chunks = [], sessionStartTime = "", pitchHistory = [], silenceTimeout = null;
+let chunks = [], sessionStartTime = "", pitchHistory = [];
 
 // 1. KELL
 setInterval(() => { 
@@ -26,14 +26,7 @@ async function startApp() {
         ctx.createMediaStreamSource(stream).connect(analyser);
         analyser.connect(processor); processor.connect(ctx.destination);
         
-        mediaRecorder = new MediaRecorder(stream);
-        
-        // PIDEV SALVESTUS: Me ei pane kordagi pausi peale, et vältida hakkimist
-        mediaRecorder.ondataavailable = e => {
-            if (e.data.size > 0 && isLive) {
-                chunks.push(e.data);
-            }
-        };
+        setupRecorder();
 
         processor.onaudioprocess = () => {
             if (!isLive) return;
@@ -48,34 +41,33 @@ async function startApp() {
             document.getElementById('mic-bar').style.width = Math.min(volume * 5, 100) + "%";
             document.getElementById('hz-val').innerText = Math.round(pitch) + " Hz";
 
-            // Kõne tuvastamine
-            let isSpeech = volume > 3 && pitch > 50;
-            
+            let isSpeech = volume > 2 && pitch > 50;
             if (isSpeech) {
-                speechMs += 50;
-                pitchHistory.push(pitch);
-                document.getElementById('status-light').style.background = "#22c55e"; // Roheline
-                if (silenceTimeout) { clearTimeout(silenceTimeout); silenceTimeout = null; }
+                speechMs += 50; pitchHistory.push(pitch);
+                document.getElementById('status-light').style.background = "#22c55e";
             } else {
                 silenceMs += 50;
-                if (!silenceTimeout) {
-                    document.getElementById('status-light').style.background = "#334155"; // Hall
-                    silenceTimeout = setTimeout(() => { silenceTimeout = null; }, 1200);
-                }
+                document.getElementById('status-light').style.background = "#334155";
             }
             document.getElementById('s-val').innerText = Math.round(speechMs/1000) + "s";
             document.getElementById('v-val').innerText = Math.round(silenceMs/1000) + "s";
         };
 
-        mediaRecorder.start(100); // Salvestab lühikeste juppidena, et midagi kaduma ei läheks
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
         isLive = true;
-    } catch (err) { alert("Viga mikrofoni juurdepääsul."); }
+    } catch (err) { alert("Viga seadmes."); }
+}
+
+function setupRecorder() {
+    mediaRecorder = new MediaRecorder(stream);
+    chunks = [];
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    mediaRecorder.start();
 }
 
 // 4. SALVESTAMINE
 function saveSegment(callback) {
-    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+    if (mediaRecorder && mediaRecorder.state === "recording") {
         const endTime = new Date().toLocaleTimeString('et-EE');
         const note = document.getElementById('session-note').value.trim();
         
@@ -94,39 +86,47 @@ function saveSegment(callback) {
             };
         };
         mediaRecorder.stop();
-    } else if (callback) callback();
+    } else { if(callback) callback(); }
 }
 
-// 5. NUPUD
-document.getElementById('startBtn').onclick = () => {
+// 5. NUPUD (EventListenerid on kindlamad kui onclick HTML-is)
+document.getElementById('startBtn').addEventListener('click', () => {
     document.getElementById('start-section').classList.add('hidden');
     document.getElementById('mic-section').classList.remove('hidden');
     startApp();
-};
+});
 
-document.getElementById('toggleNoteBtn').onclick = () => {
+document.getElementById('toggleNoteBtn').addEventListener('click', () => {
     const container = document.getElementById('note-container');
-    container.classList.toggle('hidden');
-};
+    const btn = document.getElementById('toggleNoteBtn');
+    if (container.classList.contains('hidden')) {
+        container.classList.remove('hidden');
+        btn.innerText = "Sule märge";
+    } else {
+        container.classList.add('hidden');
+        btn.innerText = "+ Lisa märge";
+    }
+});
 
-document.getElementById('fixBtn').onclick = () => {
+document.getElementById('fixBtn').addEventListener('click', () => {
     saveSegment(() => {
-        chunks = []; speechMs = 0; silenceMs = 0; pitchHistory = [];
+        speechMs = 0; silenceMs = 0; pitchHistory = [];
         document.getElementById('session-note').value = "";
         document.getElementById('note-container').classList.add('hidden');
+        document.getElementById('toggleNoteBtn').innerText = "+ Lisa märge";
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
-        mediaRecorder.start(100);
+        setupRecorder();
     });
-};
+});
 
-document.getElementById('stopBtn').onclick = () => {
+document.getElementById('stopBtn').addEventListener('click', () => {
     if (confirm("Lõpeta sessioon?")) { 
-        isLive = false; 
-        if(wakeLock) wakeLock.release(); 
-        saveSegment(() => location.reload()); 
+        isLive = false; if(wakeLock) wakeLock.release(); 
+        saveSegment(() => { setTimeout(() => location.reload(), 500); }); 
     }
-};
+});
 
+// 6. AJALUGU
 function renderHistory() {
     if(!db) return;
     const tx = db.transaction("log", "readonly");
@@ -134,15 +134,15 @@ function renderHistory() {
         const items = e.target.result.sort((a,b) => b.id - a.id);
         const list = document.getElementById('history-list');
         list.innerHTML = items.map(s => `
-            <div class="glass rounded-[30px] p-6 border border-white/5 mb-4">
-                <div class="flex justify-between text-[10px] text-slate-500 font-bold mb-4 uppercase tracking-tighter">
+            <div class="glass rounded-[30px] p-6 border border-white/5 mb-4 shadow-xl">
+                <div class="flex justify-between text-[10px] text-slate-500 font-bold mb-4 uppercase">
                     <span>${s.start} — ${s.end}</span>
-                    <button onclick="del(${s.id})" class="text-red-900">Kustuta</button>
+                    <button onclick="del(${s.id})" class="text-red-900/50 hover:text-red-500">Kustuta</button>
                 </div>
-                ${s.note ? `<div class="mb-4 p-4 bg-black/40 rounded-xl text-xs text-slate-300 italic border-l border-blue-500/50">${s.note}</div>` : ''}
+                ${s.note ? `<div class="mb-4 p-4 bg-black/40 rounded-xl text-xs text-slate-300 italic border-l border-blue-500">${s.note}</div>` : ''}
                 <div class="flex items-center gap-4">
                     <audio controls src="${s.audio}" class="flex-1 h-8 opacity-60"></audio>
-                    <button onclick="fullDownload(${s.id})" class="text-blue-500 text-[10px] font-bold uppercase">Lata</button>
+                    <button onclick="fullDownload(${s.id})" class="text-blue-500 text-[10px] font-bold uppercase tracking-widest">Lata</button>
                 </div>
             </div>`).join('');
     };
