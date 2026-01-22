@@ -3,15 +3,18 @@ let chunks = [], speechMap = [], pitchHistory = [];
 let sessionStartTime = "", autoFixInterval;
 let hzMin = Infinity, hzMax = 0;
 
+// KELL
 setInterval(() => { 
     const clock = document.getElementById('clock');
     if(clock) clock.innerText = new Date().toLocaleTimeString('et-EE'); 
 }, 1000);
 
-const dbReq = indexedDB.open("Peegel_V25_DB", 1);
+// ANDMEBAAS - Uus versioon, et vältida vanu konflikte
+const dbReq = indexedDB.open("Peegel_V26_Final", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
+// START
 document.getElementById('start-btn').onclick = async () => {
     document.getElementById('setup-screen').classList.add('hidden');
     document.getElementById('active-session').classList.remove('hidden');
@@ -27,8 +30,14 @@ document.getElementById('start-btn').onclick = async () => {
         ctx.createMediaStreamSource(stream).connect(analyser).connect(processor);
         processor.connect(ctx.destination);
 
-        mediaRecorder = new MediaRecorder(stream);
-        mediaRecorder.ondataavailable = e => { if (e.data.size > 0 && isLive) chunks.push({ blob: e.data, t: Date.now() }); };
+        // Kasutame kindlat tüüpi, mida telefonid eelistavad
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+        
+        mediaRecorder.ondataavailable = e => { 
+            if (e.data.size > 0 && isLive) {
+                chunks.push({ blob: e.data, t: Date.now() }); 
+            }
+        };
 
         processor.onaudioprocess = () => {
             if (!isLive) return;
@@ -61,7 +70,8 @@ document.getElementById('start-btn').onclick = async () => {
             document.getElementById('silence-sec').innerText = Math.round(silenceMs/1000) + "s";
         };
 
-        mediaRecorder.start(200); 
+        // Salvestame tihedalt (100ms), et lõikamine oleks täpne
+        mediaRecorder.start(100); 
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
         isLive = true;
         autoFixInterval = setInterval(() => fixSession(), 600000); 
@@ -70,38 +80,68 @@ document.getElementById('start-btn').onclick = async () => {
 
 async function fixSession(callback) {
     if (!mediaRecorder || mediaRecorder.state === "inactive") return;
+    
+    // Võtame andmetest "pildi" enne peatamist
     const snapNote = document.getElementById('note-input').value;
-    const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
+    const snapStart = sessionStartTime;
+    const snapEnd = new Date().toLocaleTimeString('et-EE');
     const snapStats = { min: hzMin, max: hzMax, s: speechMs, v: silenceMs };
-    const snapChunks = [...chunks], snapMap = [...speechMap];
+    const snapChunks = [...chunks];
+    const snapMap = [...speechMap];
 
     mediaRecorder.onstop = async () => {
-        // RESET kohe
+        // Alustame kohe uue sessiooniga taustal
         chunks = []; speechMap = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
         document.getElementById('note-input').value = "";
-        if (isLive) mediaRecorder.start(200);
+        if (isLive) mediaRecorder.start(100);
 
-        // OPTIMEERITUD LÕIKAMINE: Kasutame kiiret filtreerimist
-        const cleanBlobs = snapChunks.filter(c => {
-            return snapMap.some(m => m.s && Math.abs(m.t - c.t) < 2500); // 2.5s puhver
-        }).map(c => c.blob);
+        // --- PUHASTAMISE TUUM ---
+        // Selle asemel, et lihtsalt filtreerida, loome uue massiivi
+        // mis garanteerib, et meil on olemas vähemalt esimene "tükk" failist,
+        // mis sisaldab vajalikku informatsiooni pleieri jaoks.
+        
+        let cleanBlobs = [];
+        if (snapChunks.length > 0) {
+            // Lisame alati faili päris esimese jupi (metadata jaoks)
+            cleanBlobs.push(snapChunks[0].blob); 
+            
+            // Lisame kõik ülejäänud jupid, kus on kõnet (+ 2s varu)
+            for (let i = 1; i < snapChunks.length; i++) {
+                const chunk = snapChunks[i];
+                const isSpeechNearby = snapMap.some(m => m.s && Math.abs(m.t - chunk.t) < 2000);
+                if (isSpeechNearby) {
+                    cleanBlobs.push(chunk.blob);
+                }
+            }
+        }
 
-        const fullB = new Blob(snapChunks.map(c => c.blob), { type: 'audio/webm' });
-        const cleanB = cleanBlobs.length > 0 ? new Blob(cleanBlobs, { type: 'audio/webm' }) : null;
+        const fullBlob = new Blob(snapChunks.map(c => c.blob), { type: 'audio/webm' });
+        const cleanBlob = cleanBlobs.length > 1 ? new Blob(cleanBlobs, { type: 'audio/webm' }) : null;
 
-        const fullBase = await toB64(fullB);
-        const cleanBase = cleanB ? await toB64(cleanB) : null;
+        const fullBase = await toB64(fullBlob);
+        const cleanBase = cleanBlob ? await toB64(cleanBlob) : null;
 
         const tx = db.transaction("sessions", "readwrite");
         tx.objectStore("sessions").add({
-            id: Date.now(), start: snapStart, end: snapEnd,
-            hzMin: snapStats.min === Infinity ? 0 : snapStats.min, hzMax: snapStats.max,
-            note: snapNote, audioFull: fullBase, audioClean: cleanBase,
-            s: Math.round(snapStats.s/1000), v: Math.round(snapStats.v/1000)
+            id: Date.now(),
+            start: snapStart,
+            end: snapEnd,
+            hzMin: snapStats.min === Infinity ? 0 : snapStats.min, 
+            hzMax: snapStats.max,
+            note: snapNote,
+            audioFull: fullBase, 
+            audioClean: cleanBase,
+            s: Math.round(snapStats.s/1000), 
+            v: Math.round(snapStats.v/1000)
         });
-        tx.oncomplete = () => { renderHistory(); if (callback) callback(); };
+
+        tx.oncomplete = () => {
+            renderHistory();
+            if (callback) callback();
+        };
     };
+    
     mediaRecorder.stop();
 }
 
@@ -114,17 +154,17 @@ function renderHistory() {
         const list = e.target.result.sort((a,b) => b.id - a.id);
         document.getElementById('history-container').innerHTML = list.map(s => `
             <div class="glass rounded-[30px] p-5 space-y-4 shadow-xl border border-white/5">
-                <div class="flex justify-between text-[10px] font-bold uppercase text-slate-500 leading-tight">
+                <div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase">
                     <span>${s.start}-${s.end} | <span class="hz-accent">${s.hzMin}-${s.hzMax} Hz</span></span>
-                    <button onclick="delS(${s.id})" class="text-red-900 font-bold opacity-50">Kustuta</button>
+                    <button onclick="delS(${s.id})" class="text-red-900 font-bold uppercase opacity-50">Kustuta</button>
                 </div>
                 
-                <div class="p-4 bg-green-500/5 rounded-2xl space-y-3 border border-green-500/10">
-                    <div class="flex justify-between items-center text-[9px] font-black text-green-400 uppercase">
+                <div class="p-4 bg-green-500/5 rounded-2xl space-y-2 border border-green-500/10">
+                    <div class="flex justify-between items-center text-[9px] font-black text-green-400 uppercase tracking-widest">
                         <span>Puhas vestlus (${s.s}s)</span>
                         ${s.audioClean ? `<button onclick="dl('${s.audioClean}', 'Puhas_${s.id}')" class="text-green-400 font-bold border border-green-400/20 px-2 py-0.5 rounded">Lata .webm</button>` : ''}
                     </div>
-                    ${s.audioClean ? `<audio src="${s.audioClean}" controls preload="metadata"></audio>` : '<p class="text-[8px] text-slate-600">Ei tuvastatud</p>'}
+                    ${s.audioClean ? `<audio src="${s.audioClean}" controls preload="auto"></audio>` : '<p class="text-[8px] text-slate-600 uppercase">Heli ei tuvastatud</p>'}
                 </div>
 
                 <div class="opacity-20 p-2 space-y-1">
