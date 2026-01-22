@@ -1,161 +1,69 @@
-let isLive = false, speechMs = 0, silenceMs = 0, db, stream, mediaRecorder, wakeLock = null;
-let chunks = [], sessionStartTime = "", pitchHistory = [];
+<!DOCTYPE html>
+<html lang="et">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Peegel v18.1</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
+        .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
+        .hidden { display: none !important; }
+        button:active { transform: scale(0.95); }
+    </style>
+</head>
+<body class="p-6 min-h-screen flex flex-col items-center">
 
-// 1. KELL
-setInterval(() => { 
-    const el = document.getElementById('clock');
-    if(el) el.innerText = new Date().toLocaleTimeString('et-EE'); 
-}, 1000);
+    <div class="w-full max-w-md space-y-6">
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-xl font-bold tracking-tighter text-blue-500 uppercase italic">Peegel</h1>
+            <div id="clock" class="text-2xl font-bold text-yellow-500 tracking-tighter">00:00:00</div>
+        </div>
 
-// 2. ANDMEBAAS
-const dbReq = indexedDB.open("Peegel_Final_DB", 1);
-dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("log", { keyPath: "id" }); };
-dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
-
-// 3. ANALÜÜS JA PIDEV SALVESTUS
-async function startApp() {
-    try {
-        stream = await navigator.mediaDevices.getUserMedia({ 
-            audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } 
-        });
-        if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
-
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const analyser = ctx.createAnalyser();
-        const processor = ctx.createScriptProcessor(2048, 1, 1);
-        ctx.createMediaStreamSource(stream).connect(analyser);
-        analyser.connect(processor); processor.connect(ctx.destination);
-        
-        setupRecorder();
-
-        processor.onaudioprocess = () => {
-            if (!isLive) return;
-            const data = new Uint8Array(analyser.frequencyBinCount);
-            analyser.getByteFrequencyData(data);
-            const volume = data.reduce((a,b) => a+b) / data.length;
-            
-            let maxVal = -1, maxIdx = -1;
-            for (let i = 0; i < data.length/2; i++) { if (data[i] > maxVal) { maxVal = data[i]; maxIdx = i; } }
-            const pitch = maxIdx * (ctx.sampleRate/2) / (data.length/2);
-
-            document.getElementById('mic-bar').style.width = Math.min(volume * 5, 100) + "%";
-            document.getElementById('hz-val').innerText = Math.round(pitch) + " Hz";
-
-            let isSpeech = volume > 2 && pitch > 50;
-            if (isSpeech) {
-                speechMs += 50; pitchHistory.push(pitch);
-                document.getElementById('status-light').style.background = "#22c55e";
-            } else {
-                silenceMs += 50;
-                document.getElementById('status-light').style.background = "#334155";
-            }
-            document.getElementById('s-val').innerText = Math.round(speechMs/1000) + "s";
-            document.getElementById('v-val').innerText = Math.round(silenceMs/1000) + "s";
-        };
-
-        sessionStartTime = new Date().toLocaleTimeString('et-EE');
-        isLive = true;
-    } catch (err) { alert("Viga seadmes."); }
-}
-
-function setupRecorder() {
-    mediaRecorder = new MediaRecorder(stream);
-    chunks = [];
-    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-    mediaRecorder.start();
-}
-
-// 4. SALVESTAMINE
-function saveSegment(callback) {
-    if (mediaRecorder && mediaRecorder.state === "recording") {
-        const endTime = new Date().toLocaleTimeString('et-EE');
-        const note = document.getElementById('session-note').value.trim();
-        
-        mediaRecorder.onstop = () => {
-            let finalHz = pitchHistory.length > 0 ? Math.round(pitchHistory.reduce((a,b)=>a+b)/pitchHistory.length) : 0;
-            const blob = new Blob(chunks, { type: 'audio/webm' });
-            const reader = new FileReader();
-            reader.readAsDataURL(blob);
-            reader.onloadend = () => {
-                const tx = db.transaction("log", "readwrite");
-                tx.objectStore("log").add({ 
-                    id: Date.now(), start: sessionStartTime, end: endTime, 
-                    audio: reader.result, avgHz: finalHz, note: note 
-                });
-                tx.oncomplete = () => { renderHistory(); if(callback) callback(); };
-            };
-        };
-        mediaRecorder.stop();
-    } else { if(callback) callback(); }
-}
-
-// 5. NUPUD (EventListenerid on kindlamad kui onclick HTML-is)
-document.getElementById('startBtn').addEventListener('click', () => {
-    document.getElementById('start-section').classList.add('hidden');
-    document.getElementById('mic-section').classList.remove('hidden');
-    startApp();
-});
-
-document.getElementById('toggleNoteBtn').addEventListener('click', () => {
-    const container = document.getElementById('note-container');
-    const btn = document.getElementById('toggleNoteBtn');
-    if (container.classList.contains('hidden')) {
-        container.classList.remove('hidden');
-        btn.innerText = "Sule märge";
-    } else {
-        container.classList.add('hidden');
-        btn.innerText = "+ Lisa märge";
-    }
-});
-
-document.getElementById('fixBtn').addEventListener('click', () => {
-    saveSegment(() => {
-        speechMs = 0; silenceMs = 0; pitchHistory = [];
-        document.getElementById('session-note').value = "";
-        document.getElementById('note-container').classList.add('hidden');
-        document.getElementById('toggleNoteBtn').innerText = "+ Lisa märge";
-        sessionStartTime = new Date().toLocaleTimeString('et-EE');
-        setupRecorder();
-    });
-});
-
-document.getElementById('stopBtn').addEventListener('click', () => {
-    if (confirm("Lõpeta sessioon?")) { 
-        isLive = false; if(wakeLock) wakeLock.release(); 
-        saveSegment(() => { setTimeout(() => location.reload(), 500); }); 
-    }
-});
-
-// 6. AJALUGU
-function renderHistory() {
-    if(!db) return;
-    const tx = db.transaction("log", "readonly");
-    tx.objectStore("log").getAll().onsuccess = e => {
-        const items = e.target.result.sort((a,b) => b.id - a.id);
-        const list = document.getElementById('history-list');
-        list.innerHTML = items.map(s => `
-            <div class="glass rounded-[30px] p-6 border border-white/5 mb-4 shadow-xl">
-                <div class="flex justify-between text-[10px] text-slate-500 font-bold mb-4 uppercase">
-                    <span>${s.start} — ${s.end}</span>
-                    <button onclick="del(${s.id})" class="text-red-900/50 hover:text-red-500">Kustuta</button>
+        <div id="mic-section" class="hidden space-y-6">
+            <div class="glass rounded-[40px] p-8 space-y-6 shadow-2xl">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center gap-3">
+                        <div id="status-light" class="w-3 h-3 bg-slate-700 rounded-full transition-all duration-300"></div>
+                        <div class="w-32 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                            <div id="mic-bar" class="h-full bg-green-400 w-0 transition-all duration-75"></div>
+                        </div>
+                    </div>
+                    <div id="hz-val" class="text-xl font-bold text-blue-400 italic font-mono">0 Hz</div>
                 </div>
-                ${s.note ? `<div class="mb-4 p-4 bg-black/40 rounded-xl text-xs text-slate-300 italic border-l border-blue-500">${s.note}</div>` : ''}
-                <div class="flex items-center gap-4">
-                    <audio controls src="${s.audio}" class="flex-1 h-8 opacity-60"></audio>
-                    <button onclick="fullDownload(${s.id})" class="text-blue-500 text-[10px] font-bold uppercase tracking-widest">Lata</button>
+                <div class="grid grid-cols-2 gap-4 text-center border-t border-white/5 pt-4">
+                    <div><p class="text-[9px] text-slate-500 uppercase font-bold">Kõne</p><span id="s-val" class="text-lg font-bold text-green-400">0s</span></div>
+                    <div><p class="text-[9px] text-slate-500 uppercase font-bold">Vaikus</p><span id="v-val" class="text-lg font-bold text-slate-500">0s</span></div>
                 </div>
-            </div>`).join('');
-    };
-}
+            </div>
 
-window.del = id => { if(confirm("Kustuta?")) { const tx = db.transaction("log", "readwrite"); tx.objectStore("log").delete(id); tx.oncomplete = renderHistory; } };
+            <div class="space-y-3">
+                <button id="toggleNoteBtn" class="w-full py-4 rounded-3xl border border-white/10 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 bg-white/5 transition-all">
+                    + Lisa märge
+                </button>
+                <div id="note-container" class="hidden glass rounded-[30px] p-4 shadow-inner">
+                    <textarea id="session-note" class="w-full bg-transparent p-2 text-sm text-slate-200 focus:outline-none placeholder-slate-700 resize-none" placeholder="Kirjuta siia..." rows="2"></textarea>
+                </div>
+            </div>
 
-window.fullDownload = id => {
-    const tx = db.transaction("log", "readonly");
-    tx.objectStore("log").get(id).onsuccess = e => {
-        const d = e.target.result;
-        const html = `<html><body style="background:#020617;color:white;padding:40px;font-family:sans-serif;"><h2>${d.start}</h2><p>${d.note || ''}</p><audio controls src="${d.audio}"></audio></body></html>`;
-        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([html], {type:'text/html'}));
-        a.download = `Sessioon_${d.id}.html`; a.click();
-    };
-};
+            <div class="grid grid-cols-2 gap-4">
+                <button id="fixBtn" class="bg-blue-600 text-white py-6 rounded-[30px] font-black uppercase text-xs tracking-[0.2em] shadow-lg">Fikseeri</button>
+                <button id="stopBtn" class="bg-red-900/40 text-red-500 py-6 rounded-[30px] font-black uppercase text-xs tracking-[0.2em]">Lõpeta</button>
+            </div>
+        </div>
+
+        <div id="start-section" class="flex flex-col items-center pt-10">
+            <button id="startBtn" class="bg-blue-600 text-white px-16 py-8 rounded-[40px] font-black uppercase tracking-widest shadow-2xl shadow-blue-900/40 text-xl">
+                Alusta
+            </button>
+        </div>
+
+        <div class="pt-10 w-full">
+            <p class="text-[10px] text-slate-600 font-black uppercase tracking-[0.3em] mb-6 text-center italic">Uurimuse ajalugu</p>
+            <div id="history-list" class="space-y-4 pb-24"></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
