@@ -1,18 +1,18 @@
 let isLive = false, speechMs = 0, silenceMs = 0, db, stream, mediaRecorder, wakeLock = null;
 let chunks = [], speechMap = [], hzMin = Infinity, hzMax = 0, sessionStartTime = "";
 
-// KELL
+// 1. KELL (Oranž, õhuke)
 setInterval(() => { 
     const clock = document.getElementById('clock');
     if(clock) clock.innerText = new Date().toLocaleTimeString('et-EE'); 
 }, 1000);
 
-// ANDMEBAAS - Uus versioon andmete puhastamiseks
-const dbReq = indexedDB.open("Peegel_Pro_V35", 1);
+// 2. ANDMEBAAS (Uus versioon V36)
+const dbReq = indexedDB.open("Peegel_Pro_V36", 1);
 dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
 dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
-// START
+// 3. MIKROFONI KÄIVITAMINE
 document.getElementById('start-btn').onclick = async () => {
     document.getElementById('setup-screen').classList.add('hidden');
     document.getElementById('active-session').classList.remove('hidden');
@@ -27,12 +27,11 @@ document.getElementById('start-btn').onclick = async () => {
         ctx.createMediaStreamSource(stream).connect(analyser).connect(processor);
         processor.connect(ctx.destination);
 
-        // Kasutame fikseeritud sämplimist, et lõikamine oleks võimalik
-        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
         
         mediaRecorder.ondataavailable = e => { 
             if (e.data.size > 0 && isLive) {
-                // Lisame ajahetke igale tükile
+                // Lisame andmed koos täpse ajatempliga
                 chunks.push({ data: e.data, t: Date.now() }); 
             } 
         };
@@ -63,26 +62,27 @@ document.getElementById('start-btn').onclick = async () => {
                 silenceMs += 50;
                 document.getElementById('status-light').style.background = "#334155";
             }
-            // Märgime reaalajas üles iga 50ms oleku
+            // Salvestame oleku iga 50ms järel
             speechMap.push({ t: t, s: isSpeaking });
             
             document.getElementById('speech-sec').innerText = Math.round(speechMs/1000) + "s";
             document.getElementById('silence-sec').innerText = Math.round(silenceMs/1000) + "s";
         };
 
-        mediaRecorder.start(100); // Väikesed tükid on lõikamiseks hädavajalikud
+        mediaRecorder.start(100); 
         sessionStartTime = new Date().toLocaleTimeString('et-EE');
         isLive = true;
-    } catch (err) { alert("Mikker viga."); }
+    } catch (err) { alert("Viga mikkriga!"); }
 };
 
-// FIKSEERI
+// 4. FIKSEERIMINE
 async function fixSession(callback) {
     if (!mediaRecorder || mediaRecorder.state === "inactive") return;
     const snapNote = document.getElementById('note-input').value;
     const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
     const snapStats = { min: hzMin, max: hzMax, s: speechMs, v: silenceMs };
-    const snapChunks = [...chunks], snapMap = [...speechMap];
+    const snapChunks = [...chunks];
+    const snapMap = [...speechMap];
 
     mediaRecorder.onstop = async () => {
         const fullBlob = new Blob(snapChunks.map(c => c.data), { type: 'audio/webm' });
@@ -107,7 +107,7 @@ async function fixSession(callback) {
     mediaRecorder.stop();
 }
 
-// LÕIKAMISE NUPP - SEE ON NÜÜD UUENDATUD
+// 5. VAIKUSE EEMALDAMINE (Uuendatud loogika)
 async function processSilence(id) {
     const btn = document.getElementById(`proc-btn-${id}`);
     btn.innerText = "LÕIKAN...";
@@ -119,23 +119,22 @@ async function processSilence(id) {
     store.get(id).onsuccess = async (e) => {
         const s = e.target.result;
         
-        // Leiame kõik tükid, mis on märgitud kõneks (kasutame 1.2s akent)
-        const cleanData = s.rawChunks.filter(chunk => {
-            return s.rawMap.some(map => map.s && Math.abs(map.t - chunk.t) < 1200);
-        }).map(c => c.data);
+        // Me loome uue andmevoo ainult nendest tükkidest, kus räägiti
+        // Kasutame 1-sekundilist akent, et jutt oleks loomulik
+        const filteredChunks = s.rawChunks.filter(chunk => {
+            return s.rawMap.some(map => map.s && Math.abs(map.t - chunk.t) < 1000);
+        });
 
-        if (cleanData.length > 0) {
-            // Kriitiline samm: Loome uue Blobi uue päisega
-            const cleanBlob = new Blob(cleanData, { type: 'audio/webm;codecs=opus' });
-            
-            // Konverteerime base64-ks, et salvestada
+        if (filteredChunks.length > 0) {
+            // Kriitiline: Me loome täiesti uue Blobi ilma vana meta-infota
+            const cleanBlob = new Blob(filteredChunks.map(c => c.data), { type: 'audio/webm' });
             s.audioClean = await toB64(cleanBlob);
             
             const updateTx = db.transaction("sessions", "readwrite");
             updateTx.objectStore("sessions").put(s);
             updateTx.oncomplete = () => { renderHistory(); };
         } else {
-            alert("Selles klipis pole piisavalt vestlust!");
+            alert("Vestlust ei tuvastatud!");
             renderHistory();
         }
     };
@@ -143,13 +142,14 @@ async function processSilence(id) {
 
 function toB64(b) { return new Promise(r => { const f = new FileReader(); f.onloadend = () => r(f.result); f.readAsDataURL(b); }); }
 
+// 6. LOGI KUVAMINE
 function renderHistory() {
     if(!db) return;
     const tx = db.transaction("sessions", "readonly");
     tx.objectStore("sessions").getAll().onsuccess = e => {
         const list = e.target.result.sort((a,b) => b.id - a.id);
         document.getElementById('history-container').innerHTML = list.map(s => `
-            <div class="glass rounded-[30px] p-5 space-y-4 border border-white/5 shadow-xl text-left">
+            <div class="glass rounded-[30px] p-5 space-y-4 shadow-xl border border-white/5 text-left">
                 <div class="flex justify-between text-[10px] font-bold uppercase tracking-tight">
                     <span>
                         <span class="text-fix-orange">${s.start}-${s.end}</span>
