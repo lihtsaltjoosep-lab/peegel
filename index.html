@@ -7,11 +7,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Peegel Pro v83</title>
+    <title>Peegel Pro v84</title>
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
         .hidden { display: none !important; }
         audio { height: 35px; width: 100%; border-radius: 12px; filter: invert(1) brightness(0.7) contrast(1.3) sepia(1) hue-rotate(195deg) saturate(6); }
@@ -26,8 +26,8 @@
         </div>
 
         <div id="setup-screen" class="pt-20 flex flex-col items-center">
-            <button onclick="startSession()" class="bg-blue-600 w-36 h-36 rounded-full font-black text-2xl text-white shadow-2xl border-4 border-blue-400 active:scale-90">START</button>
-            <p class="mt-4 text-slate-500 text-xs uppercase tracking-widest">v83: No Address Bar</p>
+            <button onclick="startSession()" class="bg-blue-600 w-36 h-36 rounded-full font-black text-2xl text-white shadow-2xl border-4 border-blue-400 active:scale-90 uppercase">Start</button>
+            <p class="mt-4 text-slate-500 text-xs uppercase tracking-widest">v84: Fullscreen Mode</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4">
@@ -57,10 +57,7 @@
             </div>
         </div>
 
-        <div class="w-full space-y-4 pt-4 pb-24 text-center">
-            <h3 class="text-[10px] font-black uppercase tracking-[0.4em] text-slate-700 italic">Sessioonide logi</h3>
-            <div id="history-container" class="space-y-4 mt-4 text-left"></div>
-        </div>
+        <div id="history-container" class="space-y-4 mt-4 text-left pb-24"></div>
     </div>
 
     <script>
@@ -75,12 +72,20 @@
         let autoFixTimer = null;
         let wakeLock = null;
 
+        // TÄISEKRAANI FUNKTSIOON
+        function toggleFullscreen() {
+            let doc = window.document;
+            let docEl = doc.documentElement;
+            let requestFullScreen = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
+            if (requestFullScreen) { requestFullScreen.call(docEl); }
+        }
+
         async function requestWakeLock() {
             try {
                 if ('wakeLock' in navigator) {
                     wakeLock = await navigator.wakeLock.request('screen');
                 }
-            } catch (err) { console.log("WakeLock: " + err.message); }
+            } catch (err) { console.log("WakeLock viga"); }
         }
 
         function formatTime(ms) {
@@ -100,7 +105,10 @@
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
         async function startSession() {
+            // Aktiveerime täisekraani nupuvajutusel
+            toggleFullscreen();
             await requestWakeLock();
+
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
