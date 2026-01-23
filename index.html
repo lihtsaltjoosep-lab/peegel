@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Peegel Pro v92</title>
+    <title>Peegel Pro v93</title>
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -22,13 +22,13 @@
 <body class="p-4 min-h-screen flex flex-col items-center">
     <div class="w-full max-w-md space-y-4">
         <div class="flex justify-between items-center p-2">
-            <div id="clock" class="text-3xl font-light tracking-tighter">00:00:00</div>
-            <h1 class="text-xl font-black text-blue-500 italic uppercase">Peegel</h1>
+            <h1 class="text-xl font-black text-blue-500 italic uppercase leading-none">Peegel</h1>
+            <div id="clock" class="text-xl font-light tracking-tighter leading-none">00:00:00</div>
         </div>
 
         <div id="setup-screen" class="pt-20 flex flex-col items-center">
             <button onclick="startSession()" class="bg-blue-600/50 w-36 h-36 rounded-full font-black text-3xl text-orange-800 shadow-2xl border-4 border-orange-800/60 active:scale-90 uppercase btn-glow">Start</button>
-            <p class="mt-4 text-slate-500 text-xs uppercase tracking-widest">v92: Final Muted Tone</p>
+            <p class="mt-4 text-slate-500 text-xs uppercase tracking-widest">v93: Symmetric Header</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4">
