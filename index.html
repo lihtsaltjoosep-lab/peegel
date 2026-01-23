@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Peegel Pro v98</title>
+    <title>Peegel Pro v100</title>
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -26,14 +26,14 @@
     <div class="w-full max-w-md space-y-4">
         <div class="flex justify-between items-center p-2">
             <h1 class="text-3xl brand-font uppercase leading-none">Peegel</h1>
-            <div id="clock" class="text-3xl font-light tracking-tighter leading-none">00:00:00</div>
+            <div id="clock" class="text-xl font-light tracking-tighter leading-none">00:00:00</div>
         </div>
 
         <div id="setup-screen" class="pt-12 pb-8 flex flex-col items-center">
             <button onclick="startSession()" class="start-btn w-36 h-36 rounded-full font-black text-3xl shadow-2xl active:scale-95 uppercase btn-glow">
                 <span class="start-text">Start</span>
             </button>
-            <p class="mt-6 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v98: Speech Filter & Keep-Alive</p>
+            <p class="mt-6 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v100: Hz Recovery & Filters</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4">
@@ -45,6 +45,9 @@
                             <span class="text-green-400">V:<span id="speech-sec">0m 0s</span></span>
                             <span><span style="color: #1d4ed8; font-weight: 900;">P:</span> <span id="silence-sec" style="color: #60a5fa;">0m 0s</span></span>
                         </div>
+                    </div>
+                    <div class="font-mono text-[12px] uppercase font-bold text-blue-400">
+                        Hz: <span id="hz-val">0</span>
                     </div>
                 </div>
                 <textarea id="note-input" class="w-full bg-transparent text-sm text-slate-200 focus:outline-none placeholder-slate-700 resize-none font-medium h-32 pt-2" placeholder="Kirjuta märkmed siia..." rows="5"></textarea>
@@ -58,24 +61,31 @@
     </div>
 
     <script>
-        const VOLUME_THRESHOLD = 8.0; // Tõstsin veidi läve, et välistada väga vaiksed sahinad
+        const VOLUME_THRESHOLD = 8.5; 
         const AUTO_FIX_MS = 600000; 
         const MIN_SPEECH_TO_SAVE_MS = 2000; 
 
         let isLive = false, speechMs = 0, silenceMs = 0, db, stream = null;
         let audioCtx = null, processor = null, source = null, speechBuffer = [];
+        let hzMin = Infinity, hzMax = 0;
         let sessionStartTime = "";
         let autoFixTimer = null;
         let wakeLock = null;
         let silentTag = null;
 
-        // TAUSTAL ELUS HOIDMINE (Audio Keep-Alive)
+        function formatTime(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const m = Math.floor(totalSeconds / 60);
+            const s = totalSeconds % 60;
+            return `${m}m ${s}s`;
+        }
+
         function keepAlive() {
             if (silentTag) return;
             silentTag = document.createElement('audio');
-            silentTag.src = "data:audio/wav;base64,UklGRigAAABXQVZFavmHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"; // 0.1s vaikust loopis
+            silentTag.src = "data:audio/wav;base64,UklGRigAAABXQVZFavmHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
             silentTag.loop = true;
-            silentTag.play();
+            silentTag.play().catch(() => {});
         }
 
         async function requestWakeLock() {
@@ -99,12 +109,10 @@
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 source = audioCtx.createMediaStreamSource(stream);
 
-                // --- INIMKÕNE FILTER (BANDPASS) ---
-                // Lõikab välja mürina alla 100Hz ja sahinad üle 3000Hz
                 const filter = audioCtx.createBiquadFilter();
                 filter.type = "bandpass";
-                filter.frequency.value = 800; // Inimkõne fookuspunkt
-                filter.Q.value = 0.5; // Laius, et püüda nii meeste kui naiste hääli
+                filter.frequency.value = 1000;
+                filter.Q.value = 1.0; 
 
                 const analyser = audioCtx.createAnalyser();
                 processor = audioCtx.createScriptProcessor(4096, 1, 1);
@@ -122,8 +130,18 @@
                     
                     const vol = data.reduce((a,b) => a+b) / data.length;
                     
-                    // Kui sagedus ja helitugevus sobivad kõnele
-                    if (vol > VOLUME_THRESHOLD) {
+                    // Hz arvutus
+                    let maxVal = -1, maxIdx = -1;
+                    for (let i = 0; i < data.length/2; i++) {
+                        if (data[i] > maxVal) { maxVal = data[i]; maxIdx = i; }
+                    }
+                    const hz = Math.round(maxIdx * (audioCtx.sampleRate/2) / (data.length/2));
+                    
+                    if (vol > VOLUME_THRESHOLD && hz > 50) {
+                        if (hz < hzMin) hzMin = hz;
+                        if (hz > hzMax) hzMax = hz;
+                        document.getElementById('hz-val').innerText = hz;
+                        
                         speechMs += (4096 / audioCtx.sampleRate) * 1000;
                         document.getElementById('status-light').style.background = "#22c55e";
                         speechBuffer.push(new Float32Array(inputData));
@@ -131,8 +149,8 @@
                         silenceMs += (4096 / audioCtx.sampleRate) * 1000;
                         document.getElementById('status-light').style.background = "#334155";
                     }
-                    document.getElementById('speech-sec').innerText = Math.round(speechMs/1000) + "s";
-                    document.getElementById('silence-sec').innerText = Math.round(silenceMs/1000) + "s";
+                    document.getElementById('speech-sec').innerText = formatTime(speechMs);
+                    document.getElementById('silence-sec').innerText = formatTime(silenceMs);
                 };
 
                 document.getElementById('setup-screen').classList.add('hidden');
@@ -140,7 +158,7 @@
                 sessionStartTime = new Date().toLocaleTimeString('et-EE');
                 isLive = true;
                 autoFixTimer = setInterval(() => fixSession(false, false), AUTO_FIX_MS);
-            } catch (err) { alert("Mikrofoni viga!"); }
+            } catch (err) { alert("Viga mikrofoni ühendamisel!"); }
         }
 
         async function stopAndSave() {
@@ -155,14 +173,15 @@
         function fixSession(isFinal = false, isManual = false) {
             return new Promise((resolve) => {
                 if (speechMs < MIN_SPEECH_TO_SAVE_MS) {
-                    speechBuffer = []; speechMs = 0; silenceMs = 0;
+                    speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
                     return resolve();
                 }
                 const snapNote = document.getElementById('note-input').value;
                 const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
                 const currentSpeech = [...speechBuffer], currentSR = audioCtx.sampleRate;
-                const sMs = speechMs, vMs = silenceMs;
-                speechBuffer = []; speechMs = 0; silenceMs = 0;
+                const sMs = speechMs, vMs = silenceMs, finalHzMin = hzMin, finalHzMax = hzMax;
+                
+                speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
                 document.getElementById('note-input').value = "";
 
                 const cleanWav = bufferToWav(currentSpeech, currentSR);
@@ -174,7 +193,7 @@
                         id: Date.now(), start: snapStart, end: snapEnd,
                         date: new Date().toLocaleDateString('et-EE'),
                         note: snapNote, audioClean: reader.result,
-                        sMs: sMs, vMs: vMs, isManual: isManual
+                        sMs: sMs, vMs: vMs, hzMin: finalHzMin, hzMax: finalHzMax, isManual: isManual
                     });
                     tx.oncomplete = () => { renderHistory(); resolve(); };
                 };
@@ -211,10 +230,11 @@
                     <div class="glass rounded-[30px] p-5 mb-4">
                         <div class="flex justify-between items-center text-[11px] uppercase font-bold mb-3">
                             <span style="color: #22c55e;">${s.isManual ? '📌 ' : ''}${s.start}-${s.end}</span>
+                            <span class="text-blue-400">Hz: ${s.hzMin}-${s.hzMax}</span>
                             <button onclick="delS(${s.id})" style="color: #991b1b;">Kustuta</button>
                         </div>
                         <div class="p-4 bg-blue-500/5 rounded-2xl">
-                            <div class="text-[9px] font-black uppercase mb-2 text-slate-500">Kõne: ${Math.round(s.sMs/1000)}s | Vaikus: ${Math.round(s.vMs/1000)}s</div>
+                            <div class="text-[9px] font-black uppercase mb-2 text-slate-500">Kõne: ${formatTime(s.sMs)} | Vaikus: ${formatTime(s.vMs)}</div>
                             <audio src="${s.audioClean}" controls></audio>
                             ${s.note ? `<div class="p-3 bg-black/40 text-xs mt-2 rounded-lg">${s.note}</div>` : ''}
                         </div>
