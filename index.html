@@ -4,14 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="manifest" href="manifest.json">
-    <title>Peegel Pro v121</title>
+    <title>Peegel Pro v122</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
         .hidden { display: none !important; }
         
-        /* SEPIA PLAY NUPP */
+        /* ALUSTA NUPP */
         .play-ring {
             width: 150px; height: 150px; border-radius: 50%;
             background: #1d4ed8; border: 5px solid #f4ead5;
@@ -26,11 +26,12 @@
         audio { height: 35px; width: 100%; border-radius: 12px; filter: invert(1) brightness(0.8); }
         #status-light { width: 12px; height: 12px; border-radius: 50%; background: #334155; transition: all 0.2s ease; }
         .light-on { background: #22c55e !important; box-shadow: 0 0 10px #22c55e; }
+        .bar { width: 2px; background: #3b82f6; border-radius: 1px; transition: height 0.05s ease; opacity: 0.3; }
     </style>
 </head>
 <body class="p-4 min-h-screen flex flex-col items-center">
-    <div class="w-full max-w-md space-y-4">
-        <div class="flex justify-between items-center p-2 text-center">
+    <div class="w-full max-w-md space-y-4 text-center">
+        <div class="flex justify-between items-center p-2">
             <h1 class="text-3xl font-black italic uppercase text-blue-500 leading-none">Peegel</h1>
             <div id="clock" class="text-xl font-light text-amber-600">00:00:00</div>
         </div>
@@ -43,7 +44,7 @@
                 </svg>
                 <div class="play-text">Alusta</div>
             </div>
-            <p class="mt-16 text-slate-600 text-[10px] uppercase tracking-[0.4em]">v121: PWA Install & Pulse</p>
+            <p class="mt-16 text-slate-600 text-[10px] uppercase tracking-[0.4em]">v122: Full Restoration</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4 text-left">
@@ -58,38 +59,31 @@
                     </div>
                     <div class="font-mono text-xs font-bold text-blue-400 uppercase">Hz: <span id="hz-val">0</span></div>
                 </div>
-                <textarea id="note-input" class="w-full bg-transparent text-sm text-slate-200 focus:outline-none placeholder-slate-700 h-32 pt-2" placeholder="Märkmed..."></textarea>
+                <div id="visualizer" class="h-6 flex items-center justify-center gap-1 opacity-20"></div>
+                <textarea id="note-input" class="w-full bg-transparent text-sm text-slate-200 focus:outline-none placeholder-slate-700 resize-none h-32 pt-2" placeholder="Kirjuta märkmed siia..."></textarea>
             </div>
             <div class="grid grid-cols-2 gap-3">
-                <button onclick="fixSession(false, true)" class="bg-blue-600 text-white py-5 rounded-[25px] font-bold uppercase text-xs">Fikseeri</button>
-                <button onclick="stopAndSave()" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-bold uppercase text-xs">Lõpeta</button>
+                <button id="fix-btn" class="bg-blue-600 text-white py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95 shadow-lg">Fikseeri</button>
+                <button id="stop-btn" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95">Lõpeta</button>
             </div>
         </div>
-        <div id="history-container" class="space-y-4 mt-4 pb-24"></div>
+        <div id="history-container" class="space-y-4 mt-4 text-left pb-24"></div>
     </div>
 
     <script>
         let isLive = false, speechMs = 0, silenceMs = 0, db, stream = null;
-        let audioCtx = null, processor = null, speechBuffer = [];
-        let sessionStartTime = "";
+        let audioCtx = null, processor = null, source = null, speechBuffer = [];
+        let hzMin = Infinity, hzMax = 0, sessionStartTime = "";
 
+        // NUPPUDE ÜHENDAMINE
         document.getElementById('main-start-btn').addEventListener('click', startSession);
-
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js');
-        }
+        document.getElementById('fix-btn').addEventListener('click', () => fixSession(false, true));
+        document.getElementById('stop-btn').addEventListener('click', stopAndSave);
 
         setInterval(() => {
             document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE');
+            if (isLive && audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
         }, 1000);
-
-        // --- PULSE: Iga 2 minuti järel väike värin, et Android ei uinuks ---
-        setInterval(() => {
-            if (isLive && 'vibrate' in navigator) {
-                navigator.vibrate(10); 
-                console.log("Pulse check");
-            }
-        }, 120000);
 
         const dbReq = indexedDB.open("Peegel_DataCapsule_V61", 1);
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
@@ -99,22 +93,32 @@
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 
-                // Echo loop hoiab helikanali lahti
+                // Active Echo Loop
                 const gain = audioCtx.createGain(); gain.gain.value = 0.001;
-                const source = audioCtx.createMediaStreamSource(stream);
+                source = audioCtx.createMediaStreamSource(stream);
                 source.connect(gain); gain.connect(audioCtx.destination);
 
                 const analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 64;
+                const dataArray = new Uint8Array(analyser.frequencyBinCount);
                 processor = audioCtx.createScriptProcessor(4096, 1, 1);
+                
                 source.connect(analyser); analyser.connect(processor); processor.connect(audioCtx.destination);
                 
                 processor.onaudioprocess = (e) => {
                     if (!isLive) return;
-                    const data = new Uint8Array(analyser.frequencyBinCount);
-                    analyser.getByteFrequencyData(data);
-                    const vol = data.reduce((a,b) => a+b) / data.length;
+                    analyser.getByteFrequencyData(dataArray);
+                    const vol = dataArray.reduce((a,b) => a+b) / dataArray.length;
+                    
+                    let maxVal = -1, maxIdx = -1;
+                    for (let i = 0; i < dataArray.length/2; i++) { if (dataArray[i] > maxVal) { maxVal = dataArray[i]; maxIdx = i; } }
+                    const hz = Math.round(maxIdx * (audioCtx.sampleRate/2) / (dataArray.length/2));
 
                     if (vol > 9) {
+                        if (hz > 50) { 
+                            if (hz < hzMin) hzMin = hz; if (hz > hzMax) hzMax = hz; 
+                            document.getElementById('hz-val').innerText = hz; 
+                        }
                         speechMs += (4096 / audioCtx.sampleRate) * 1000;
                         document.getElementById('status-light').classList.add('light-on');
                         speechBuffer.push(new Float32Array(e.inputBuffer.getChannelData(0)));
@@ -130,7 +134,57 @@
                 document.getElementById('active-session').classList.remove('hidden');
                 sessionStartTime = new Date().toLocaleTimeString('et-EE');
                 isLive = true;
-            } catch (err) { alert("Luba mikker!"); }
+                
+                // 10min auto-save
+                setInterval(() => { if (isLive) fixSession(false, false); }, 600000);
+            } catch (err) { alert("Viga!"); }
+        }
+
+        function fixSession(isFinal = false, isManual = false) {
+            return new Promise((resolve) => {
+                if (speechMs < 2000) return resolve();
+                const snapNote = document.getElementById('note-input').value;
+                const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
+                const sMs = speechMs, vMs = silenceMs, fHzMin = hzMin, fHzMax = hzMax;
+                const currentSpeech = [...speechBuffer], currentSR = audioCtx.sampleRate;
+                
+                speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
+                sessionStartTime = new Date().toLocaleTimeString('et-EE');
+                if(isManual) document.getElementById('note-input').value = "";
+
+                const cleanWav = bufferToWav(currentSpeech, currentSR);
+                const reader = new FileReader();
+                reader.readAsDataURL(cleanWav);
+                reader.onloadend = () => {
+                    const tx = db.transaction("sessions", "readwrite");
+                    tx.objectStore("sessions").add({
+                        id: Date.now(), start: snapStart, end: snapEnd, date: new Date().toLocaleDateString('et-EE'),
+                        note: snapNote, audioClean: reader.result, sMs: sMs, vMs: vMs, hzMin: fHzMin, hzMax: fHzMax, isManual: isManual
+                    });
+                    tx.oncomplete = () => { renderHistory(); resolve(); };
+                };
+            });
+        }
+
+        function bufferToWav(chunks, sampleRate) {
+            const length = chunks.reduce((acc, curr) => acc + curr.length, 0);
+            const buffer = new ArrayBuffer(44 + length * 2);
+            const view = new DataView(buffer);
+            const writeS = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+            writeS(0, 'RIFF'); view.setUint32(4, 32 + length * 2, true); writeS(8, 'WAVE'); writeS(12, 'fmt ');
+            view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+            view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * 2, true);
+            view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeS(36, 'data');
+            view.setUint32(40, length * 2, true);
+            let offset = 44;
+            for (let chunk of chunks) {
+                for (let i = 0; i < chunk.length; i++) {
+                    const s = Math.max(-1, Math.min(1, chunk[i]));
+                    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+                    offset += 2;
+                }
+            }
+            return new Blob([buffer], { type: 'audio/wav' });
         }
 
         function renderHistory() {
@@ -139,17 +193,32 @@
             tx.objectStore("sessions").getAll().onsuccess = e => {
                 const list = e.target.result.sort((a,b) => b.id - a.id);
                 document.getElementById('history-container').innerHTML = list.map(s => `
-                    <div class="glass rounded-[30px] p-5 mb-4 text-xs">
+                    <div class="glass rounded-[30px] p-5 mb-4 text-xs text-left">
                         <div class="flex justify-between font-bold mb-3 items-center">
-                            <span style="color: #22c55e;">${s.start}-${s.end}</span>
-                            <button onclick="delS(${s.id})" style="color: #991b1b;">Kustuta</button>
+                            <span style="color: #22c55e;">${s.start}-${s.end} | <span style="color: #60a5fa; font-weight: normal;">Hz: ${s.hzMin}-${s.hzMax}</span></span>
+                            <button onclick="delS(${s.id})" style="color: #991b1b; font-size: 10px;">KUSTUTA</button>
                         </div>
-                        <audio src="${s.audioClean}" controls class="w-full"></audio>
+                        <div class="p-4 bg-blue-500/5 rounded-2xl text-left">
+                            <div class="flex justify-between text-[9px] font-black uppercase mb-3 text-slate-500 items-center">
+                                <span>Kõne: ${Math.floor(s.sMs/60000)}m ${Math.floor((s.sMs%60000)/1000)}s | P: ${Math.floor(s.vMs/60000)}m ${Math.floor((s.vMs%60000)/1000)}s</span>
+                                <button onclick="downloadCapsule(${s.id})" class="text-blue-400 px-2 py-1 bg-blue-500/10 rounded-md">HTML</button>
+                            </div>
+                            <audio src="${s.audioClean}" controls class="w-full"></audio>
+                            ${s.note ? `<div class="p-3 bg-black/40 text-[11px] mt-3 rounded-xl text-slate-300 italic font-normal border-l-2 border-blue-500/30 text-left">${s.note}</div>` : ''}
+                        </div>
                     </div>`).join('');
             };
         }
         window.delS = id => { if(confirm("Kustuta?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id); tx.oncomplete = renderHistory; } };
-        async function stopAndSave() { isLive = false; location.reload(); }
+        window.downloadCapsule = id => {
+            const tx = db.transaction("sessions", "readonly");
+            tx.objectStore("sessions").get(id).onsuccess = (e) => {
+                const s = e.target.result;
+                const html = `<html><body style="background:#020617;color:white;padding:20px;"><h1>Sessioon ${s.date}</h1><audio controls src="${s.audioClean}"></audio><p>${s.note || ""}</p></body></html>`;
+                const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([html], {type:'text/html'})); link.download = `Peegel_${s.id}.html`; link.click();
+            };
+        }
+        async function stopAndSave() { isLive = false; await fixSession(true, true); location.reload(); }
     </script>
 </body>
 </html>
