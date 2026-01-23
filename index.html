@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Peegel Pro v123</title>
+    <title>Peegel Pro v125</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
+        body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
         .hidden { display: none !important; }
         
@@ -27,7 +27,7 @@
 </head>
 <body class="p-4 min-h-screen flex flex-col items-center">
     <div class="w-full max-w-md space-y-4">
-        <div class="flex justify-between items-center p-2">
+        <div class="flex justify-between items-center p-2 text-center">
             <h1 class="text-3xl font-black italic uppercase text-blue-500">Peegel</h1>
             <div id="clock" class="text-xl font-light text-amber-600">00:00:00</div>
         </div>
@@ -39,29 +39,27 @@
                 </svg>
                 <div class="play-text">Alusta</div>
             </div>
-            <p class="mt-16 text-slate-600 text-[10px] uppercase tracking-[0.4em]">v123: 9.9 Core + Silence Cut</p>
+            <p class="mt-16 text-slate-600 text-[10px] uppercase tracking-[0.4em]">v125: SIMPLICITY RESTORED</p>
         </div>
 
-        <div id="active-session" class="hidden space-y-4 text-left">
+        <div id="active-session" class="hidden space-y-4">
             <div class="glass rounded-[35px] p-6 shadow-2xl space-y-4 border-t border-blue-500/20">
                 <div class="flex justify-between items-center pb-3 border-b border-white/5">
                     <div class="flex items-center gap-4">
                         <div id="status-light"></div>
-                        <div class="flex gap-4 font-mono text-xs font-bold uppercase">
-                            <span class="text-green-400">V:<span id="speech-sec">0m 0s</span></span>
-                            <span><span style="color: #1d4ed8; font-weight: 900;">P:</span> <span id="silence-sec" style="color: #60a5fa;">0m 0s</span></span>
+                        <div class="flex gap-4 font-mono text-xs font-bold uppercase text-slate-400 text-left">
+                            V:<span id="speech-sec">0s</span> | P:<span id="silence-sec">0s</span>
                         </div>
                     </div>
-                    <div class="font-mono text-xs font-bold text-blue-400 uppercase">Hz: <span id="hz-val">0</span></div>
                 </div>
                 <textarea id="note-input" class="w-full bg-transparent text-sm text-slate-200 focus:outline-none h-32 pt-2" placeholder="Märkmed..."></textarea>
             </div>
             <div class="grid grid-cols-2 gap-3">
-                <button onclick="fixSession(false, true)" class="bg-blue-600 text-white py-5 rounded-[25px] font-bold uppercase text-xs">Fikseeri</button>
-                <button onclick="stopAndSave()" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-bold uppercase text-xs">Lõpeta</button>
+                <button onclick="fixSession(false, true)" class="bg-blue-600 text-white py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95">Fikseeri</button>
+                <button onclick="stopAndSave()" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95">Lõpeta</button>
             </div>
         </div>
-        <div id="history-container" class="space-y-4 mt-4 pb-24"></div>
+        <div id="history-container" class="space-y-4 mt-4 pb-24 text-left"></div>
     </div>
 
     <script>
@@ -69,9 +67,7 @@
         let audioCtx = null, processor = null, speechBuffer = [];
         let sessionStartTime = "";
 
-        setInterval(() => {
-            document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE');
-        }, 1000);
+        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }, 1000);
 
         const dbReq = indexedDB.open("Peegel_DataCapsule_V61", 1);
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
@@ -82,39 +78,28 @@
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioCtx.createMediaStreamSource(stream);
                 
-                // 9.9 eduvõti oli tõenäoliselt ScriptProcessor otsene ühendus väljundiga
                 processor = audioCtx.createScriptProcessor(4096, 1, 1);
-                const analyser = audioCtx.createAnalyser();
-                analyser.fftSize = 256;
-                const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-                source.connect(analyser);
-                analyser.connect(processor);
-                processor.connect(audioCtx.destination); // See hoiab keti elus
+                source.connect(processor);
+                processor.connect(audioCtx.destination);
 
                 processor.onaudioprocess = (e) => {
                     if (!isLive) return;
-                    analyser.getByteFrequencyData(dataArray);
-                    const vol = dataArray.reduce((a,b) => a+b) / dataArray.length;
-                    
-                    // Sageduse arvutus
-                    let maxVal = -1, maxIdx = -1;
-                    for (let i = 0; i < dataArray.length; i++) { if (dataArray[i] > maxVal) { maxVal = dataArray[i]; maxIdx = i; } }
-                    const hz = Math.round(maxIdx * (audioCtx.sampleRate/2) / (dataArray.length));
+                    const input = e.inputBuffer.getChannelData(0);
+                    let sum = 0;
+                    for(let i=0; i<input.length; i++) sum += input[i]*input[i];
+                    const rms = Math.sqrt(sum/input.length);
 
-                    // VAIKUSE LÕIKUR (Ainult siis kui vol > 10, lisame puhvrisse)
-                    if (vol > 10) {
+                    if (rms > 0.01) { // Lihtne hääle tuvastus
                         speechMs += (4096 / audioCtx.sampleRate) * 1000;
                         document.getElementById('status-light').classList.add('light-on');
-                        document.getElementById('hz-val').innerText = hz;
-                        speechBuffer.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+                        speechBuffer.push(new Float32Array(input));
                     } else {
                         silenceMs += (4096 / audioCtx.sampleRate) * 1000;
                         document.getElementById('status-light').classList.remove('light-on');
                     }
                     
-                    document.getElementById('speech-sec').innerText = Math.floor(speechMs/60000) + "m " + Math.floor((speechMs%60000)/1000) + "s";
-                    document.getElementById('silence-sec').innerText = Math.floor(silenceMs/60000) + "m " + Math.floor((silenceMs%60000)/1000) + "s";
+                    document.getElementById('speech-sec').innerText = Math.floor(speechMs/1000) + "s";
+                    document.getElementById('silence-sec').innerText = Math.floor(silenceMs/1000) + "s";
                 };
 
                 document.getElementById('setup-screen').classList.add('hidden');
@@ -122,56 +107,49 @@
                 sessionStartTime = new Date().toLocaleTimeString('et-EE');
                 isLive = true;
                 
-                // 10min auto-save
                 setInterval(() => { if (isLive) fixSession(false, false); }, 600000);
             } catch (err) { alert("Viga!"); }
         }
 
-        // Salvestamise ja ajaloo funktsioonid (püsivad samad, et andmed ei kaoks)
-        function fixSession(isFinal = false, isManual = false) {
-            return new Promise((resolve) => {
-                if (speechMs < 1000) return resolve();
-                const snapNote = document.getElementById('note-input').value;
-                const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
-                const sMs = speechMs, vMs = silenceMs;
-                const currentSpeech = [...speechBuffer];
-                speechBuffer = []; speechMs = 0; silenceMs = 0;
-                sessionStartTime = new Date().toLocaleTimeString('et-EE');
-                if(isManual) document.getElementById('note-input').value = "";
+        async function fixSession(isFinal = false, isManual = false) {
+            if (speechMs < 500) return;
+            const snapNote = document.getElementById('note-input').value;
+            const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
+            const sMs = speechMs;
+            const currentSpeech = [...speechBuffer];
+            
+            speechBuffer = []; speechMs = 0; silenceMs = 0;
+            sessionStartTime = new Date().toLocaleTimeString('et-EE');
+            if(isManual) document.getElementById('note-input').value = "";
 
-                const cleanWav = bufferToWav(currentSpeech, audioCtx.sampleRate);
-                const reader = new FileReader();
-                reader.readAsDataURL(cleanWav);
-                reader.onloadend = () => {
-                    const tx = db.transaction("sessions", "readwrite");
-                    tx.objectStore("sessions").add({
-                        id: Date.now(), start: snapStart, end: snapEnd, date: new Date().toLocaleDateString('et-EE'),
-                        note: snapNote, audioClean: reader.result, sMs: sMs, vMs: vMs
-                    });
-                    tx.oncomplete = () => { renderHistory(); resolve(); };
-                };
-            });
-        }
-
-        function bufferToWav(chunks, sampleRate) {
-            const length = chunks.reduce((acc, curr) => acc + curr.length, 0);
+            const length = currentSpeech.reduce((acc, curr) => acc + curr.length, 0);
             const buffer = new ArrayBuffer(44 + length * 2);
             const view = new DataView(buffer);
             const writeS = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
             writeS(0, 'RIFF'); view.setUint32(4, 32 + length * 2, true); writeS(8, 'WAVE'); writeS(12, 'fmt ');
             view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
-            view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * 2, true);
+            view.setUint32(24, audioCtx.sampleRate, true); view.setUint32(28, audioCtx.sampleRate * 2, true);
             view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeS(36, 'data');
             view.setUint32(40, length * 2, true);
             let offset = 44;
-            for (let chunk of chunks) {
+            for (let chunk of currentSpeech) {
                 for (let i = 0; i < chunk.length; i++) {
                     const s = Math.max(-1, Math.min(1, chunk[i]));
                     view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
                     offset += 2;
                 }
             }
-            return new Blob([buffer], { type: 'audio/wav' });
+            
+            const reader = new FileReader();
+            reader.readAsDataURL(new Blob([buffer], { type: 'audio/wav' }));
+            reader.onloadend = () => {
+                const tx = db.transaction("sessions", "readwrite");
+                tx.objectStore("sessions").add({
+                    id: Date.now(), start: snapStart, end: snapEnd, date: new Date().toLocaleDateString('et-EE'),
+                    note: snapNote, audioClean: reader.result, sMs: sMs
+                });
+                tx.oncomplete = () => { renderHistory(); };
+            };
         }
 
         function renderHistory() {
@@ -180,13 +158,12 @@
             tx.objectStore("sessions").getAll().onsuccess = e => {
                 const list = e.target.result.sort((a,b) => b.id - a.id);
                 document.getElementById('history-container').innerHTML = list.map(s => `
-                    <div class="glass rounded-[30px] p-5 mb-4 text-xs text-left">
+                    <div class="glass rounded-[30px] p-5 mb-4 text-xs">
                         <div class="flex justify-between font-bold mb-2">
                             <span class="text-green-400">${s.start}-${s.end}</span>
                             <button onclick="delS(${s.id})" class="text-red-800">Kustuta</button>
                         </div>
                         <audio src="${s.audioClean}" controls class="w-full"></audio>
-                        ${s.note ? `<div class="mt-2 text-slate-400 italic">${s.note}</div>` : ''}
                     </div>`).join('');
             };
         }
