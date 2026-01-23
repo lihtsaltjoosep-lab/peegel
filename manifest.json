@@ -1,17 +1,16 @@
 {
   "short_name": "Peegel",
-  "name": "Peegel Pro",
+  "name": "Peegel Pro Data Capsule",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/584/584703.png",
+      "src": "https://cdn-icons-png.flaticon.com/512/584/584695.png",
       "type": "image/png",
       "sizes": "512x512"
     }
   ],
   "start_url": "./index.html",
   "background_color": "#020617",
-  "display": "fullscreen",
-  "orientation": "portrait",
+  "display": "standalone",
   "scope": "./",
-  "theme_color": "#020617"
+  "theme_color": "#1d4ed8"
 }
