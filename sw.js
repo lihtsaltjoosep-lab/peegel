@@ -1,12 +1,17 @@
-// sw.js - v108 Ping-Pong
+// sw.js v111 - Ultra Stability
 self.addEventListener('install', (e) => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(clients.claim()));
 
-// See intervall hoiab Service Workeri ärvel
+self.addEventListener('message', (event) => {
+    if (event.data === 'STAY_ALIVE') {
+        // Hoiab SW protsessi aktiivsena läbi sündmuste ahela
+    }
+});
+
 setInterval(() => {
     self.clients.matchAll().then(clients => {
         clients.forEach(client => {
-            client.postMessage({ type: 'PING' }); // Saadab äpile "koputuse"
+            client.postMessage({ type: 'HEARTBEAT', timestamp: Date.now() });
         });
     });
-}, 20000); // Iga 20 sekundi järel
+}, 10000);
