@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Peegel Pro v80</title>
+    <title>Peegel Pro v81</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -22,7 +22,7 @@
 
         <div id="setup-screen" class="pt-20 flex flex-col items-center">
             <button onclick="startSession()" class="bg-blue-600 w-36 h-36 rounded-full font-black text-2xl text-white shadow-2xl border-4 border-blue-400 active:scale-90">START</button>
-            <p class="mt-4 text-slate-500 text-xs uppercase tracking-widest">v80: Sinine Rahu</p>
+            <p class="mt-4 text-slate-500 text-xs uppercase tracking-widest">v81: WakeLock & Vibe</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4">
@@ -32,19 +32,15 @@
                         <div id="status-light" class="w-4 h-4 bg-slate-700 rounded-full transition-all"></div>
                         <div class="flex gap-4 font-mono text-[14px] uppercase font-bold">
                             <span class="text-green-400">V:<span id="speech-sec">0m 0s</span></span>
-                            
                             <span>
                                 <span style="color: #1d4ed8; font-weight: 900;">P:</span>
                                 <span id="silence-sec" style="color: #60a5fa;">0m 0s</span>
                             </span>
                         </div>
                     </div>
-                    
                     <div class="flex gap-2 font-mono text-[12px] uppercase font-bold items-center">
                         <span style="color: #1d4ed8; font-weight: 900;">Hz</span>
-
                         <span style="color: #60a5fa;" id="hz-min-val">0</span>
-                        
                         <span style="color: #60a5fa;" id="hz-max-val">0</span>
                     </div>
                 </div>
@@ -63,7 +59,7 @@
     </div>
 
     <script>
-        console.log("Peegel v80 laetud");
+        console.log("Peegel v81 käivitub...");
 
         const VOLUME_THRESHOLD = 6.0; 
         const MIN_HZ = 80;            
@@ -74,6 +70,17 @@
         let audioCtx = null, processor = null, source = null, speechBuffer = [];
         let hzMin = Infinity, hzMax = 0, sessionStartTime = "";
         let autoFixTimer = null;
+        let wakeLock = null;
+
+        // WakeLock funktsioon - hoiab ekraani/protsessori ärvel
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log("WakeLock aktiivne");
+                }
+            } catch (err) { console.log("WakeLock viga: " + err.message); }
+        }
 
         function formatTime(ms) {
             const totalSeconds = Math.round(ms / 1000);
@@ -92,9 +99,23 @@
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
         async function startSession() {
+            // Vibratsioon Androidis (200ms)
+            if (navigator.vibrate) navigator.vibrate(200);
+            
+            await requestWakeLock();
+
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Androidi "keep-alive" heli (vaikne surin, et süsteem ei uinuks)
+                const oscillator = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                gain.gain.value = 0.001; // Peaaegu kuulmatu
+                oscillator.connect(gain);
+                gain.connect(audioCtx.destination);
+                oscillator.start();
+
                 source = audioCtx.createMediaStreamSource(stream);
                 const filter = audioCtx.createBiquadFilter();
                 filter.type = "highpass";
@@ -138,43 +159,31 @@
                 sessionStartTime = new Date().toLocaleTimeString('et-EE');
                 isLive = true;
                 autoFixTimer = setInterval(fixSession, AUTO_FIX_MS);
-            } catch (err) { alert("Mikrofoni viga! Veendu, et lubasid mikrofoni."); }
+            } catch (err) { alert("Mikrofoni viga!"); }
         }
 
         async function stopAndSave() {
             if (!isLive) return;
-            document.getElementById('stop-btn').innerText = "KONTROLLIN...";
             isLive = false;
+            if (wakeLock) { wakeLock.release(); wakeLock = null; }
             clearInterval(autoFixTimer);
             await fixSession(true); 
-            if (stream) stream.getTracks().forEach(t => t.stop());
             location.reload();
         }
 
         function fixSession(isFinal = false) {
             return new Promise((resolve) => {
                 if (speechMs < MIN_SPEECH_TO_SAVE_MS) {
-                    if (isFinal) {
-                        alert("Sessioon oli liiga lühike (alla 2s) või tühi.\nEi salvestanud.");
-                    }
-                    speechBuffer = [];
-                    speechMs = 0;
-                    silenceMs = 0;
-                    hzMin = Infinity; 
-                    hzMax = 0;
-                    document.getElementById('note-input').value = ""; 
+                    if (isFinal) alert("Liiga lühike sessioon.");
+                    speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
                     return resolve();
                 }
-
                 const snapNote = document.getElementById('note-input').value;
                 const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
                 const snapStats = { min: hzMin, max: hzMax, s: speechMs, v: silenceMs };
                 const currentSpeech = [...speechBuffer], currentSR = audioCtx.sampleRate;
-                
                 speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
                 document.getElementById('note-input').value = "";
-                sessionStartTime = new Date().toLocaleTimeString('et-EE');
-
                 const cleanWav = bufferToWav(currentSpeech, currentSR);
                 toB64(cleanWav).then(cleanBase => {
                     const tx = db.transaction("sessions", "readwrite");
@@ -213,74 +222,29 @@
 
         function toB64(b) { return new Promise(r => { const f = new FileReader(); f.onloadend = () => r(f.result); f.readAsDataURL(b); }); }
 
-        function downloadCapsule(id) {
-            const tx = db.transaction("sessions", "readonly");
-            tx.objectStore("sessions").get(id).onsuccess = (e) => {
-                const s = e.target.result;
-                const htmlContent = `<!DOCTYPE html><html lang="et"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Peegel Sessioon ${s.date}</title><style>body{background:#0f172a;color:#e2e8f0;font-family:sans-serif;padding:2rem;max-width:800px;margin:0 auto;line-height:1.6}.card{background:rgba(30,41,59,0.5);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:2rem;margin-bottom:2rem}h1{color:#3b82f6;font-style:italic;text-transform:uppercase;margin-top:0}.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-bottom:2rem}.stat-box{background:rgba(0,0,0,0.2);padding:1rem;border-radius:10px;border-left:3px solid #3b82f6}.stat-label{font-size:0.8rem;text-transform:uppercase;color:#94a3b8;font-weight:bold;display:block}.stat-value{font-size:1.2rem;font-weight:bold;color:white}.notes-box{background:rgba(255,255,255,0.05);padding:1.5rem;border-radius:10px;white-space:pre-wrap;font-family:monospace;border-left:3px solid #f59e0b}audio{width:100%;margin-top:1rem;filter:invert(1) brightness(0.8)}hr{border-color:rgba(255,255,255,0.1);margin:2rem 0}</style></head><body><div class="card"><div style="display:flex;justify-content:space-between;align-items:center;"><h1>Peegel Andmekapsel</h1><div style="text-align:right;font-size:0.9rem;color:#94a3b8;">${s.date}<br>${s.start} - ${s.end}</div></div><hr><div class="stats-grid"><div class="stat-box"><span class="stat-label" style="color:#22c55e">Kõne</span><span class="stat-value">${formatTime(s.sMs)}</span></div><div class="stat-box"><span class="stat-label" style="color:#f59e0b">Vaikus</span><span class="stat-value">${formatTime(s.vMs)}</span></div><div class="stat-box"><span class="stat-label" style="color:#3b82f6">Sagedus</span><span class="stat-value">${s.hzMin} - ${s.hzMax} Hz</span></div><div class="stat-box"><span class="stat-label">Kokku</span><span class="stat-value">${formatTime(s.sMs + s.vMs)}</span></div></div><h3>MÄRKMED</h3><div class="notes-box">${s.note ? s.note : 'Märkmed puuduvad'}</div><hr><h3>HELI</h3><audio controls src="${s.audioClean}"></audio></div></body></html>`;
-                const blob = new Blob([htmlContent], { type: 'text/html' });
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(blob);
-                link.download = `Peegel_Kapsel_${s.date}_${s.start.replace(/:/g, '-')}.html`;
-                link.click();
-            };
-        }
-
-        function downloadRawWav(audioData, id) {
-            const link = document.createElement('a');
-            link.href = audioData;
-            link.download = `Peegel_Audio_${id}.wav`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
         function renderHistory() {
             if(!db) return;
             const tx = db.transaction("sessions", "readonly");
             tx.objectStore("sessions").getAll().onsuccess = e => {
                 const list = e.target.result.sort((a,b) => b.id - a.id);
-                const html = list.map(s => {
-                    const noteHtml = s.note && s.note.trim() !== "" ? 
-                        `<button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-2 text-[10px] font-black uppercase bg-blue-500/10 rounded-xl hover:bg-blue-500/20 transition-all" style="color: #3b82f6;">Kuva Märge</button>
-                         <div class="hidden p-4 bg-black/40 rounded-xl text-xs italic text-slate-300 border-l-2 border-blue-500 mt-2 whitespace-pre-wrap">${s.note}</div>` 
-                        : '';
-                    
-                    return `
-                    <div class="glass rounded-[30px] p-5 mb-4 text-left">
+                document.getElementById('history-container').innerHTML = list.map(s => `
+                    <div class="glass rounded-[30px] p-5 mb-4">
                         <div class="flex justify-between items-center text-[11px] uppercase font-bold mb-3">
-                            <span class="flex gap-2 items-center">
+                            <span class="flex gap-2">
                                 <span style="color: #22c55e;">${s.start}-${s.end}</span>
-                                
-                                <span>
-                                    <span style="color: #1d4ed8; font-weight: 900;">Hz</span>
-                                    <span style="color: #60a5fa;">${s.hzMin}</span>
-                                    <span style="color: #60a5fa;">-</span>
-                                    <span style="color: #60a5fa;">${s.hzMax}</span> </span>
+                                <span><span style="color: #1d4ed8; font-weight: 900;">Hz</span> <span style="color: #60a5fa;">${s.hzMin}-${s.hzMax}</span></span>
                             </span>
-                            <button onclick="delS(${s.id})" style="color: #991b1b; font-weight: 800;">KUSTUTA</button>
+                            <button onclick="delS(${s.id})" style="color: #991b1b;">KUSTUTA</button>
                         </div>
-                        <div class="p-4 bg-blue-500/5 rounded-2xl border border-blue-500/10 mb-3">
-                            <div class="flex justify-between items-center text-[9px] font-black text-blue-400 uppercase mb-2">
-                                <span>
-                                    <span style="color: #1d4ed8; font-weight: 900;">VAIKUS:</span> 
-                                    <span style="color: #60a5fa;">${formatTime(s.vMs)}</span>
-                                </span>
-                                
-                                <div class="flex gap-2">
-                                    <button onclick="downloadCapsule(${s.id})" class="text-white bg-blue-600 border-0 px-2 py-1 rounded shadow text-[9px] active:scale-95">HTML</button>
-                                    <button onclick="downloadRawWav('${s.audioClean}', '${s.id}')" class="text-white bg-slate-600 border-0 px-2 py-1 rounded shadow text-[9px] active:scale-95">WAV</button>
-                                </div>
+                        <div class="p-4 bg-blue-500/5 rounded-2xl mb-3">
+                            <div class="text-[9px] font-black uppercase mb-2">
+                                <span style="color: #1d4ed8;">VAIKUS:</span> <span style="color: #60a5fa;">${formatTime(s.vMs)}</span>
                             </div>
-                            <audio src="${s.audioClean}" controls preload="metadata"></audio>
+                            <audio src="${s.audioClean}" controls></audio>
                         </div>
-                        ${noteHtml}
-                    </div>`;
-                }).join('');
-                document.getElementById('history-container').innerHTML = html;
+                    </div>`).join('');
             };
         }
-
         window.delS = id => { if(confirm("Kustuta?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id); tx.oncomplete = renderHistory; } };
     </script>
 </body>
