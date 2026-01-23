@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Peegel Pro v102</title>
+    <title>Peegel Pro v103</title>
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -32,20 +32,20 @@
             <button onclick="startSession()" class="start-btn w-36 h-36 rounded-full font-black text-3xl shadow-2xl active:scale-95 uppercase">
                 <span class="start-text">Start</span>
             </button>
-            <p class="mt-6 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v102: Compact UI</p>
+            <p class="mt-6 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v103: Precise Button Placement</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4">
             <div class="glass rounded-[35px] p-6 shadow-2xl space-y-4 border-t border-blue-500/20">
                 <div class="flex justify-between items-center pb-3 border-b border-white/5">
                     <div class="flex items-center gap-4">
-                        <div id="status-light" class="w-4 h-4 bg-slate-700 rounded-full"></div>
+                        <div id="status-light" class="w-4 h-4 bg-slate-700 rounded-full transition-all"></div>
                         <div class="flex gap-4 font-mono text-[14px] uppercase font-bold">
                             <span class="text-green-400">V:<span id="speech-sec">0m 0s</span></span>
                             <span><span style="color: #1d4ed8; font-weight: 900;">P:</span> <span id="silence-sec" style="color: #60a5fa;">0m 0s</span></span>
                         </div>
                     </div>
-                    <div class="font-mono text-[12px] uppercase font-bold text-blue-400 text-right">Hz: <span id="hz-val">0</span></div>
+                    <div class="font-mono text-[12px] uppercase font-bold text-blue-400">Hz: <span id="hz-val">0</span></div>
                 </div>
                 <textarea id="note-input" class="w-full bg-transparent text-sm text-slate-200 focus:outline-none placeholder-slate-700 resize-none h-32 pt-2" placeholder="Kirjuta märkmed siia..."></textarea>
             </div>
@@ -82,6 +82,7 @@
             silentTag = document.createElement('audio');
             silentTag.src = "data:audio/wav;base64,UklGRigAAABXQVZFavmHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
             silentTag.loop = true;
+            document.body.appendChild(silentTag);
             silentTag.play().catch(() => {});
         }
 
@@ -154,8 +155,8 @@
                 }
                 const snapNote = document.getElementById('note-input').value;
                 const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
-                const sMs = speechMs, vMs = silenceMs, finalHzMin = hzMin, finalHzMax = hzMax;
                 const currentSpeech = [...speechBuffer], currentSR = audioCtx.sampleRate;
+                const sMs = speechMs, vMs = silenceMs, finalHzMin = hzMin, finalHzMax = hzMax;
                 speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
                 document.getElementById('note-input').value = "";
                 const cleanWav = bufferToWav(currentSpeech, currentSR);
@@ -212,17 +213,15 @@
                     <div class="glass rounded-[30px] p-5 mb-4">
                         <div class="flex justify-between items-center text-[11px] uppercase font-bold mb-3">
                             <span style="color: #22c55e;">${s.isManual ? '📌 ' : ''}${s.start}-${s.end} | <span class="text-blue-400">Hz: ${s.hzMin}-${s.hzMax}</span></span>
-                            <div class="flex gap-4 items-center">
-                                <button onclick="downloadCapsule(${s.id})" class="text-blue-400 hover:text-white transition-colors">HTML</button>
-                                <button onclick="delS(${s.id})" style="color: #991b1b;">Kustuta</button>
-                            </div>
+                            <button onclick="delS(${s.id})" style="color: #991b1b;">Kustuta</button>
                         </div>
                         <div class="p-4 bg-blue-500/5 rounded-2xl">
-                            <div class="text-[9px] font-black uppercase mb-2 text-slate-500">
-                                Kõne: ${formatTime(s.sMs)} | Vaikus: ${formatTime(s.vMs)}
+                            <div class="flex justify-between text-[9px] font-black uppercase mb-2 text-slate-500 items-center">
+                                <span>Kõne: ${formatTime(s.sMs)} | Vaikus: ${formatTime(s.vMs)}</span>
+                                <button onclick="downloadCapsule(${s.id})" class="text-blue-400 hover:text-white px-2 py-1 bg-blue-500/10 rounded-md">HTML</button>
                             </div>
                             <audio src="${s.audioClean}" controls></audio>
-                            ${s.note ? `<div class="p-3 bg-black/40 text-xs mt-2 rounded-lg">${s.note}</div>` : ''}
+                            ${s.note ? `<div class="p-3 bg-black/40 text-xs mt-2 rounded-lg font-normal tracking-normal text-slate-300">${s.note}</div>` : ''}
                         </div>
                     </div>`).join('');
             };
