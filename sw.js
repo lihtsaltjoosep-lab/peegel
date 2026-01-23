@@ -1,17 +1,16 @@
-// sw.js v111 - Ultra Stability
-self.addEventListener('install', (e) => self.skipWaiting());
-self.addEventListener('activate', (e) => e.waitUntil(clients.claim()));
-
-self.addEventListener('message', (event) => {
-    if (event.data === 'STAY_ALIVE') {
-        // Hoiab SW protsessi aktiivsena läbi sündmuste ahela
+{
+  "short_name": "Peegel",
+  "name": "Peegel Pro Data Capsule",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/584/584695.png",
+      "type": "image/png",
+      "sizes": "512x512"
     }
-});
-
-setInterval(() => {
-    self.clients.matchAll().then(clients => {
-        clients.forEach(client => {
-            client.postMessage({ type: 'HEARTBEAT', timestamp: Date.now() });
-        });
-    });
-}, 10000);
+  ],
+  "start_url": "./index.html",
+  "background_color": "#020617",
+  "display": "standalone",
+  "scope": "./",
+  "theme_color": "#1d4ed8"
+}
