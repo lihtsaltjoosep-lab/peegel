@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Peegel Pro v81</title>
+    <title>Peegel Pro v82</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -22,7 +22,7 @@
 
         <div id="setup-screen" class="pt-20 flex flex-col items-center">
             <button onclick="startSession()" class="bg-blue-600 w-36 h-36 rounded-full font-black text-2xl text-white shadow-2xl border-4 border-blue-400 active:scale-90">START</button>
-            <p class="mt-4 text-slate-500 text-xs uppercase tracking-widest">v81: WakeLock & Vibe</p>
+            <p class="mt-4 text-slate-500 text-xs uppercase tracking-widest">v82: Background Mode</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4">
@@ -59,8 +59,6 @@
     </div>
 
     <script>
-        console.log("Peegel v81 käivitub...");
-
         const VOLUME_THRESHOLD = 6.0; 
         const MIN_HZ = 80;            
         const AUTO_FIX_MS = 600000; 
@@ -72,12 +70,10 @@
         let autoFixTimer = null;
         let wakeLock = null;
 
-        // WakeLock funktsioon - hoiab ekraani/protsessori ärvel
         async function requestWakeLock() {
             try {
                 if ('wakeLock' in navigator) {
                     wakeLock = await navigator.wakeLock.request('screen');
-                    console.log("WakeLock aktiivne");
                 }
             } catch (err) { console.log("WakeLock viga: " + err.message); }
         }
@@ -99,19 +95,15 @@
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
         async function startSession() {
-            // Vibratsioon Androidis (200ms)
-            if (navigator.vibrate) navigator.vibrate(200);
-            
             await requestWakeLock();
-
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 
-                // Androidi "keep-alive" heli (vaikne surin, et süsteem ei uinuks)
+                // Keep-alive signal
                 const oscillator = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
-                gain.gain.value = 0.001; // Peaaegu kuulmatu
+                gain.gain.value = 0.0001; 
                 oscillator.connect(gain);
                 gain.connect(audioCtx.destination);
                 oscillator.start();
