@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>Peegel Pro v105</title>
+    <title>Peegel Pro v106</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
@@ -30,7 +30,7 @@
             <button onclick="startSession()" class="start-btn w-36 h-36 rounded-full font-black text-3xl shadow-2xl active:scale-95 uppercase">
                 <span class="start-text">Start</span>
             </button>
-            <p class="mt-6 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v105: Ultra Stability Mode</p>
+            <p class="mt-6 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v106: Mic Reset & Stabilized</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4">
@@ -38,9 +38,9 @@
                 <div class="flex justify-between items-center pb-3 border-b border-white/5">
                     <div class="flex items-center gap-4">
                         <div id="status-light" class="w-4 h-4 bg-slate-700 rounded-full"></div>
-                        <div class="flex gap-4 font-mono text-[14px] uppercase font-bold">
-                            <span class="text-green-400 text-xs">V:<span id="speech-sec">0m 0s</span></span>
-                            <span class="text-xs"><span style="color: #1d4ed8; font-weight: 900;">P:</span> <span id="silence-sec" style="color: #60a5fa;">0m 0s</span></span>
+                        <div class="flex gap-4 font-mono text-xs uppercase font-bold">
+                            <span class="text-green-400">V:<span id="speech-sec">0m 0s</span></span>
+                            <span><span style="color: #1d4ed8; font-weight: 900;">P:</span> <span id="silence-sec" style="color: #60a5fa;">0m 0s</span></span>
                         </div>
                     </div>
                     <div class="font-mono text-[12px] uppercase font-bold text-blue-400">Hz: <span id="hz-val">0</span></div>
@@ -57,7 +57,7 @@
 
     <script>
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js');
+            navigator.serviceWorker.register('sw.js').catch(() => {});
         }
 
         const VOLUME_THRESHOLD = 8.5; 
@@ -79,30 +79,19 @@
 
         setInterval(() => { 
             document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); 
-            // TAASKÄIVITUS: Kui süsteem paneb mikrofoni pausile, äratame selle iga sekund
-            if (isLive && audioCtx) {
-                if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
-                    audioCtx.resume();
-                }
-            }
+            if (isLive && audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
         }, 1000);
 
         const dbReq = indexedDB.open("Peegel_DataCapsule_V61", 1);
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
         async function startSession() {
-            // WakeLock: Takistab ekraani täielikku väljalülitamist (kui brauser lubab)
             try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch(e){}
 
             try {
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: { 
-                        echoCancellation: false, 
-                        noiseSuppression: false, 
-                        autoGainControl: false 
-                    } 
-                });
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback' });
+                // Taastasin tavalised mikrofoni seaded, et brauser lubaks ühendust
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 source = audioCtx.createMediaStreamSource(stream);
                 
                 const filter = audioCtx.createBiquadFilter();
@@ -111,13 +100,12 @@
                 const analyser = audioCtx.createAnalyser();
                 processor = audioCtx.createScriptProcessor(4096, 1, 1);
                 
-                // Keep-alive: tekitame hääletu siinuslaine, et protsess oleks aktiivne
-                const oscillator = audioCtx.createOscillator();
-                const gainNode = audioCtx.createGain();
-                gainNode.gain.value = 0.001; // Peaaegu hääletu
-                oscillator.connect(gainNode);
-                gainNode.connect(audioCtx.destination);
-                oscillator.start();
+                // Hääletu siinuslaine taustal hoidmiseks
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                gain.gain.value = 0.0001;
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start();
 
                 source.connect(filter); filter.connect(analyser); analyser.connect(processor); processor.connect(audioCtx.destination);
                 
@@ -151,7 +139,7 @@
                 sessionStartTime = new Date().toLocaleTimeString('et-EE');
                 isLive = true;
                 autoFixTimer = setInterval(() => fixSession(false, false), AUTO_FIX_MS);
-            } catch (err) { alert("Viga!"); }
+            } catch (err) { alert("Mikrofoni viga! Palun luba mikrofon."); }
         }
 
         async function stopAndSave() {
@@ -168,7 +156,7 @@
                 }
                 const snapNote = document.getElementById('note-input').value;
                 const snapStart = sessionStartTime, snapEnd = new Date().toLocaleTimeString('et-EE');
-                const sMs = speechMs, vMs = silenceMs, finalHzMin = hzMin, finalHzMax = hzMax;
+                const sMs = speechMs, vMs = silenceMs, fHzMin = hzMin, fHzMax = hzMax;
                 const currentSpeech = [...speechBuffer], currentSR = audioCtx.sampleRate;
                 speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
                 document.getElementById('note-input').value = "";
@@ -180,7 +168,7 @@
                     tx.objectStore("sessions").add({
                         id: Date.now(), start: snapStart, end: snapEnd, date: new Date().toLocaleDateString('et-EE'),
                         note: snapNote, audioClean: reader.result, sMs: sMs, vMs: vMs,
-                        hzMin: finalHzMin, hzMax: finalHzMax, isManual: isManual
+                        hzMin: fHzMin, hzMax: fHzMax, isManual: isManual
                     });
                     tx.oncomplete = () => { renderHistory(); resolve(); };
                 };
