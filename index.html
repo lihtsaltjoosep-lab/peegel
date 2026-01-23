@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Peegel Pro v127</title>
+    <title>Peegel Pro v128</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
         .hidden { display: none !important; }
+        
         .play-ring {
             width: 150px; height: 150px; border-radius: 50%;
             background: #1d4ed8; border: 5px solid #f4ead5;
@@ -30,11 +31,11 @@
         </div>
 
         <div id="setup-screen" class="pt-24 flex flex-col items-center">
-            <div id="btn-start" class="play-ring">
+            <div onclick="startSession()" class="play-ring">
                 <svg class="play-icon-svg" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg>
                 <div class="play-text">Alusta</div>
             </div>
-            <p class="mt-16 text-slate-600 text-[10px] uppercase tracking-[0.4em]">v127: BUTTON HARD-FIX</p>
+            <p class="mt-16 text-slate-600 text-[10px] uppercase tracking-[0.4em]">v128: DIRECT CLICK</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4 text-left">
@@ -51,8 +52,8 @@
                 <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-32 pt-2" placeholder="Märkmed..."></textarea>
             </div>
             <div class="grid grid-cols-2 gap-3">
-                <button id="btn-fix" class="bg-blue-600 text-white py-5 rounded-[25px] font-bold uppercase text-xs">Fikseeri</button>
-                <button id="btn-stop" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-bold uppercase text-xs">Lõpeta</button>
+                <button onclick="fixNow()" class="bg-blue-600 text-white py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95 shadow-lg">Fikseeri</button>
+                <button onclick="location.reload()" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95">Lõpeta</button>
             </div>
         </div>
         <div id="history-container" class="space-y-4 mt-4 pb-24 text-left"></div>
@@ -67,10 +68,6 @@
 
         const dbReq = indexedDB.open("Peegel_DataCapsule_V61", 1);
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
-
-        document.getElementById('btn-start').onclick = startSession;
-        document.getElementById('btn-fix').onclick = () => fixSession(true);
-        document.getElementById('btn-stop').onclick = stopAndSave;
 
         async function startSession() {
             try {
@@ -89,7 +86,8 @@
                     for(let i=0; i<input.length; i++) sum += input[i]*input[i];
                     const rms = Math.sqrt(sum/input.length);
 
-                    if (rms > 0.012) {
+                    // Madalam lävi (0.005), et kindlasti salvestaks
+                    if (rms > 0.005) {
                         speechMs += (4096 / audioCtx.sampleRate) * 1000;
                         document.getElementById('status-light').classList.add('light-on');
                         speechBuffer.push(new Float32Array(input));
@@ -105,23 +103,45 @@
                 document.getElementById('active-session').classList.remove('hidden');
                 sessionStartTime = new Date().toLocaleTimeString('et-EE');
                 isLive = true;
-            } catch (err) { alert("Viga!"); }
+                
+                // Automaatne salvestus 10 min
+                setInterval(() => { if (isLive) fixNow(false); }, 600000);
+
+            } catch (err) { alert("Mikri viga: " + err); }
         }
 
-        function fixSession(isManual = false) {
-            if (speechMs < 500) return;
+        // SIIN ON SELLE NUPU FUNKTSIOON
+        function fixNow(showMsg = true) {
+            console.log("Nuppu vajutatud!");
+            
+            if (speechMs < 100) {
+                if(showMsg) alert("Pole midagi salvestada (vaikus)!");
+                return;
+            }
+
             const snapNote = document.getElementById('note-input').value;
             const snapStart = sessionStartTime;
             const currentSpeech = [...speechBuffer];
             const currentSR = audioCtx.sampleRate;
 
+            // Nullime kohe
             speechBuffer = []; speechMs = 0; silenceMs = 0;
             sessionStartTime = new Date().toLocaleTimeString('et-EE');
-            if(isManual) document.getElementById('note-input').value = "";
+            document.getElementById('speech-sec').innerText = "0s";
+            document.getElementById('note-input').value = "";
 
+            if(showMsg) {
+                // Visuaalne tagasiside nupule
+                const btn = document.querySelector('button[onclick="fixNow()"]');
+                const oldText = btn.innerText;
+                btn.innerText = "SALVESTAN...";
+                setTimeout(() => btn.innerText = oldText, 1000);
+            }
+
+            // WAV konvertimine
             const length = currentSpeech.reduce((acc, curr) => acc + curr.length, 0);
-            const wavBuffer = new ArrayBuffer(44 + length * 2);
-            const view = new DataView(wavBuffer);
+            const buffer = new ArrayBuffer(44 + length * 2);
+            const view = new DataView(buffer);
             const writeS = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
             writeS(0, 'RIFF'); view.setUint32(4, 32 + length * 2, true); writeS(8, 'WAVE'); writeS(12, 'fmt ');
             view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
@@ -138,7 +158,7 @@
             }
             
             const reader = new FileReader();
-            reader.readAsDataURL(new Blob([wavBuffer], { type: 'audio/wav' }));
+            reader.readAsDataURL(new Blob([buffer], { type: 'audio/wav' }));
             reader.onloadend = () => {
                 const tx = db.transaction("sessions", "readwrite");
                 tx.objectStore("sessions").add({
@@ -158,11 +178,11 @@
                     <div class="glass rounded-[30px] p-5 mb-4 text-xs">
                         <div class="flex justify-between font-bold mb-2"><span>${s.start}-${s.end}</span><button onclick="delS(${s.id})" class="text-red-800">Kustuta</button></div>
                         <audio src="${s.audioClean}" controls class="w-full"></audio>
+                        ${s.note ? `<div class="mt-2 text-slate-400 italic">${s.note}</div>` : ''}
                     </div>`).join('');
             };
         }
         window.delS = id => { if(confirm("Kustuta?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id); tx.oncomplete = renderHistory; } };
-        async function stopAndSave() { isLive = false; fixSession(true); setTimeout(() => location.reload(), 500); }
     </script>
 </body>
 </html>
