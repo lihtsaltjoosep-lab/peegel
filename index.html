@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Peegel Pro v94</title>
+    <title>Peegel Pro v96</title>
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -15,28 +15,44 @@
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
         .hidden { display: none !important; }
         audio { height: 35px; width: 100%; border-radius: 12px; filter: invert(1) brightness(0.7) contrast(1.3) sepia(1) hue-rotate(195deg) saturate(6); }
-        /* Päise värvid */
+        
         #clock { color: #f59e0b; font-weight: 300; }
-        .brand-blue { color: #3b82f6; }
-        /* Start nupu sünkroniseeritud värvid */
-        .start-btn { 
-            background-color: rgba(59, 130, 246, 0.5); /* Peegli sinine 50% opacity */
-            color: #f59e0b; /* Kella oranž */
-            border-color: #f59e0b; /* Kella oranž */
+        
+        /* Peegli font pildilt: paks ja kaldus */
+        .brand-font { 
+            color: #3b82f6; 
+            font-weight: 900; 
+            display: inline-block;
+            transform: skewX(-12deg); /* Annab pildil oleva kaldus efekti */
         }
-        .btn-glow { box-shadow: 0 0 20px rgba(245, 158, 11, 0.15); }
+        
+        /* Start nupp: Peegli sinine sisu, kitsas oranž ring */
+        .start-btn { 
+            background-color: #3b82f6; 
+            color: #f59e0b; 
+            border: 2px solid #f59e0b; /* Kitsas oranž joon */
+        }
+        /* Kitsad tähed nupul */
+        .start-text {
+            display: inline-block;
+            transform: scaleX(0.75); 
+            letter-spacing: -0.02em;
+        }
+        .btn-glow { box-shadow: 0 0 20px rgba(59, 130, 246, 0.3); }
     </style>
 </head>
 <body class="p-4 min-h-screen flex flex-col items-center">
     <div class="w-full max-w-md space-y-4">
         <div class="flex justify-between items-center p-2">
-            <h1 class="text-xl font-black brand-blue italic uppercase leading-none">Peegel</h1>
-            <div id="clock" class="text-xl font-light tracking-tighter leading-none">00:00:00</div>
+            <h1 class="text-3xl brand-font uppercase leading-none">Peegel</h1>
+            <div id="clock" class="text-3xl font-light tracking-tighter leading-none">00:00:00</div>
         </div>
 
-        <div id="setup-screen" class="pt-20 flex flex-col items-center">
-            <button onclick="startSession()" class="start-btn w-36 h-36 rounded-full font-black text-3xl shadow-2xl border-4 active:scale-90 uppercase btn-glow">Start</button>
-            <p class="mt-4 text-slate-500 text-xs uppercase tracking-widest">v94: Color Sync</p>
+        <div id="setup-screen" class="pt-24 flex flex-col items-center">
+            <button onclick="startSession()" class="start-btn w-36 h-36 rounded-full font-black text-3xl shadow-2xl active:scale-95 uppercase btn-glow">
+                <span class="start-text">Start</span>
+            </button>
+            <p class="mt-8 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v96: Final Precision</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4">
