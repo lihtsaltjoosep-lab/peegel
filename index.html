@@ -3,7 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Peegel Pro v82</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    
+    <title>Peegel Pro v83</title>
+    <link rel="manifest" href="manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -22,7 +27,7 @@
 
         <div id="setup-screen" class="pt-20 flex flex-col items-center">
             <button onclick="startSession()" class="bg-blue-600 w-36 h-36 rounded-full font-black text-2xl text-white shadow-2xl border-4 border-blue-400 active:scale-90">START</button>
-            <p class="mt-4 text-slate-500 text-xs uppercase tracking-widest">v82: Background Mode</p>
+            <p class="mt-4 text-slate-500 text-xs uppercase tracking-widest">v83: No Address Bar</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4">
@@ -75,7 +80,7 @@
                 if ('wakeLock' in navigator) {
                     wakeLock = await navigator.wakeLock.request('screen');
                 }
-            } catch (err) { console.log("WakeLock viga: " + err.message); }
+            } catch (err) { console.log("WakeLock: " + err.message); }
         }
 
         function formatTime(ms) {
@@ -100,7 +105,6 @@
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 
-                // Keep-alive signal
                 const oscillator = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
                 gain.gain.value = 0.0001; 
@@ -151,7 +155,7 @@
                 sessionStartTime = new Date().toLocaleTimeString('et-EE');
                 isLive = true;
                 autoFixTimer = setInterval(fixSession, AUTO_FIX_MS);
-            } catch (err) { alert("Mikrofoni viga!"); }
+            } catch (err) { alert("Viga!"); }
         }
 
         async function stopAndSave() {
@@ -166,7 +170,7 @@
         function fixSession(isFinal = false) {
             return new Promise((resolve) => {
                 if (speechMs < MIN_SPEECH_TO_SAVE_MS) {
-                    if (isFinal) alert("Liiga lühike sessioon.");
+                    if (isFinal) alert("Liiga lühike.");
                     speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = Infinity; hzMax = 0;
                     return resolve();
                 }
