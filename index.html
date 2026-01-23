@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="manifest" href="manifest.json">
-    <title>Peegel Pro v129</title>
+    <title>Peegel Pro v130</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -20,7 +20,7 @@
         }
         .play-icon-svg { width: 45px; height: 45px; fill: #f4ead5; margin-left: 8px; }
         .play-text { color: #f4ead5; font-weight: 900; font-size: 13px; text-transform: uppercase; margin-top: 5px; }
-        #status-light { width: 12px; height: 12px; border-radius: 50%; background: #334155; transition: background 0.2s; }
+        #status-light { width: 12px; height: 12px; border-radius: 50%; background: #334155; transition: background 0.1s; }
         .light-on { background: #22c55e !important; box-shadow: 0 0 10px #22c55e; }
     </style>
 </head>
@@ -37,7 +37,7 @@
                 <svg class="play-icon-svg" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg>
                 <div class="play-text">Alusta</div>
             </div>
-            <p class="mt-8 text-slate-600 text-[10px] uppercase tracking-[0.4em]">v129: HISTORY RESTORED</p>
+            <p class="mt-8 text-slate-600 text-[10px] uppercase tracking-[0.4em]">v130: CLEAN FIX</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4 text-left">
@@ -59,8 +59,7 @@
             </div>
         </div>
 
-        <h2 class="text-left text-xs font-bold text-slate-500 uppercase mt-8 pl-4">Salvestatud Sessioonid:</h2>
-        <div id="history-container" class="space-y-4 pb-24 text-left w-full"></div>
+        <div id="history-container" class="space-y-4 pb-24 text-left w-full mt-6"></div>
     </div>
 
     <script>
@@ -70,68 +69,32 @@
 
         setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }, 1000);
 
-        // --- ANDMEBAAS JA AJALUGU ---
+        // --- DB ---
         const dbReq = indexedDB.open("Peegel_DataCapsule_V61", 1);
-        dbReq.onsuccess = e => { 
-            db = e.target.result; 
-            console.log("DB laetud, renderdan ajaloo...");
-            renderHistory(); 
-        };
-        dbReq.onerror = e => alert("Andmebaasi viga!");
+        dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
-        function renderHistory() {
-            if(!db) return;
-            const tx = db.transaction("sessions", "readonly");
-            const store = tx.objectStore("sessions");
-            const req = store.getAll();
-            
-            req.onsuccess = e => {
-                const list = e.target.result.sort((a,b) => b.id - a.id);
-                const container = document.getElementById('history-container');
-                
-                if (list.length === 0) {
-                    container.innerHTML = '<div class="text-slate-600 text-xs italic p-4">Ajalugu on tühi.</div>';
-                    return;
-                }
-
-                container.innerHTML = list.map(s => `
-                    <div class="glass rounded-[30px] p-5 mb-4 text-xs shadow-lg relative">
-                        <div class="flex justify-between font-bold mb-3 items-center">
-                            <span class="text-green-400">${s.start} - ${s.end || '?'}</span>
-                            <button onclick="delS(${s.id})" class="text-[10px] text-red-500 bg-red-900/20 px-2 py-1 rounded">KUSTUTA</button>
-                        </div>
-                        <div class="p-4 bg-black/20 rounded-2xl border border-white/5">
-                            <div class="flex justify-between text-[9px] font-black uppercase mb-3 text-slate-500">
-                                <span>${s.date}</span>
-                                <span class="text-blue-400">Kõne: ${Math.floor((s.sMs || 0)/1000)}s</span>
-                            </div>
-                            <audio src="${s.audioClean}" controls class="w-full h-8 opacity-80"></audio>
-                            ${s.note ? `<div class="p-3 bg-black/40 text-[11px] mt-3 rounded-xl text-slate-300 italic border-l-2 border-blue-500/30">${s.note}</div>` : ''}
-                        </div>
-                    </div>`).join('');
-            };
-        }
-        window.delS = id => { if(confirm("Kindel et kustutad?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id); tx.oncomplete = renderHistory; } };
-
-        // --- AUDIO MOOTOR (V9.9 + V119) ---
+        // --- MOOTOR ---
         async function startSession() {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioCtx.createMediaStreamSource(stream);
-                processor = audioCtx.createScriptProcessor(4096, 1, 1);
                 
+                // See on see 9.9 "otseühendus", mis hoiab mikri lahti
+                processor = audioCtx.createScriptProcessor(4096, 1, 1);
                 source.connect(processor);
                 processor.connect(audioCtx.destination);
 
                 processor.onaudioprocess = (e) => {
                     if (!isLive) return;
                     const input = e.inputBuffer.getChannelData(0);
+                    
+                    // RMS arvutus (Vaikuse lõikur)
                     let sum = 0;
                     for(let i=0; i<input.length; i++) sum += input[i]*input[i];
                     const rms = Math.sqrt(sum/input.length);
 
-                    // Lävi 0.005 on hea tasakaal vaikuse ja kõne vahel
+                    // 0.005 on hea tundlikkus
                     if (rms > 0.005) {
                         speechMs += (4096 / audioCtx.sampleRate) * 1000;
                         document.getElementById('status-light').classList.add('light-on');
@@ -140,6 +103,7 @@
                         silenceMs += (4096 / audioCtx.sampleRate) * 1000;
                         document.getElementById('status-light').classList.remove('light-on');
                     }
+                    
                     document.getElementById('speech-sec').innerText = Math.floor(speechMs/60000) + "m " + Math.floor((speechMs%60000)/1000) + "s";
                     document.getElementById('silence-sec').innerText = Math.floor(silenceMs/60000) + "m " + Math.floor((silenceMs%60000)/1000) + "s";
                 };
@@ -149,67 +113,93 @@
                 sessionStartTime = new Date().toLocaleTimeString('et-EE');
                 isLive = true;
                 
-                setInterval(() => { if (isLive) fixNow(false); }, 600000);
+                // Auto-save iga 10 min
+                setInterval(() => { if (isLive) fixNow(); }, 600000);
 
-            } catch (err) { alert("Mikri viga: " + err); }
+            } catch (err) { alert("Mikri viga!"); }
         }
 
-        // --- TÖÖTAV NUPP ---
-        function fixNow(showMsg = true) {
-            if (speechMs < 500) {
-                if(showMsg) {
-                    const btn = document.querySelector('button[onclick="fixNow()"]');
-                    const old = btn.innerText; btn.innerText = "VAIKUS!"; btn.style.color = "red";
-                    setTimeout(() => { btn.innerText = old; btn.style.color = "white"; }, 1000);
-                }
-                return;
-            }
+        // --- FIKSEERIMINE (LIHTNE JA KIIRE) ---
+        function fixNow() {
+            // Kui midagi pole räägitud (<0.5s), ära tee midagi
+            if (speechMs < 500) return;
 
             const snapNote = document.getElementById('note-input').value;
             const snapStart = sessionStartTime;
             const currentSpeech = [...speechBuffer];
             const currentSR = audioCtx.sampleRate;
+            const savedMs = speechMs; // Salvestame kestuse logi jaoks
 
+            // Nullime kohe
             speechBuffer = []; speechMs = 0; silenceMs = 0;
             sessionStartTime = new Date().toLocaleTimeString('et-EE');
+            
+            // Nullime visuaali
             document.getElementById('speech-sec').innerText = "0m 0s";
             document.getElementById('note-input').value = "";
 
-            if(showMsg) {
-                const btn = document.querySelector('button[onclick="fixNow()"]');
-                btn.innerText = "OK!"; btn.style.backgroundColor = "#22c55e";
-                setTimeout(() => { btn.innerText = "FIKSEERI"; btn.style.backgroundColor = "#2563eb"; }, 1000);
-            }
-
-            const length = currentSpeech.reduce((acc, curr) => acc + curr.length, 0);
-            const buffer = new ArrayBuffer(44 + length * 2);
-            const view = new DataView(buffer);
-            const writeS = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
-            writeS(0, 'RIFF'); view.setUint32(4, 32 + length * 2, true); writeS(8, 'WAVE'); writeS(12, 'fmt ');
-            view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
-            view.setUint32(24, currentSR, true); view.setUint32(28, currentSR * 2, true);
-            view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeS(36, 'data');
-            view.setUint32(40, length * 2, true);
-            let offset = 44;
-            for (let chunk of currentSpeech) {
-                for (let i = 0; i < chunk.length; i++) {
-                    const s = Math.max(-1, Math.min(1, chunk[i]));
-                    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-                    offset += 2;
+            // Töötleme taustal
+            setTimeout(() => {
+                const length = currentSpeech.reduce((acc, curr) => acc + curr.length, 0);
+                const buffer = new ArrayBuffer(44 + length * 2);
+                const view = new DataView(buffer);
+                const writeS = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+                writeS(0, 'RIFF'); view.setUint32(4, 32 + length * 2, true); writeS(8, 'WAVE'); writeS(12, 'fmt ');
+                view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+                view.setUint32(24, currentSR, true); view.setUint32(28, currentSR * 2, true);
+                view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeS(36, 'data');
+                view.setUint32(40, length * 2, true);
+                let offset = 44;
+                for (let chunk of currentSpeech) {
+                    for (let i = 0; i < chunk.length; i++) {
+                        const s = Math.max(-1, Math.min(1, chunk[i]));
+                        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+                        offset += 2;
+                    }
                 }
-            }
+                
+                const blob = new Blob([buffer], { type: 'audio/wav' });
+                const reader = new FileReader();
+                reader.readAsDataURL(blob);
+                reader.onloadend = () => {
+                    const tx = db.transaction("sessions", "readwrite");
+                    tx.objectStore("sessions").add({
+                        id: Date.now(), 
+                        start: snapStart, 
+                        end: new Date().toLocaleTimeString('et-EE'), 
+                        date: new Date().toLocaleDateString('et-EE'), 
+                        note: snapNote, 
+                        audioClean: reader.result,
+                        sMs: savedMs
+                    });
+                    tx.oncomplete = renderHistory;
+                };
+            }, 10); // Väike delay et UI ei hanguks
+        }
+
+        // --- LOGI KUVAMINE ---
+        function renderHistory() {
+            if(!db) return;
+            const tx = db.transaction("sessions", "readonly");
+            const req = tx.objectStore("sessions").getAll();
             
-            const reader = new FileReader();
-            reader.readAsDataURL(new Blob([buffer], { type: 'audio/wav' }));
-            reader.onloadend = () => {
-                const tx = db.transaction("sessions", "readwrite");
-                tx.objectStore("sessions").add({
-                    id: Date.now(), start: snapStart, end: new Date().toLocaleTimeString('et-EE'), 
-                    date: new Date().toLocaleDateString('et-EE'), note: snapNote, audioClean: reader.result, sMs: length / currentSR * 1000
-                });
-                tx.oncomplete = renderHistory;
+            req.onsuccess = e => {
+                const list = e.target.result.sort((a,b) => b.id - a.id);
+                document.getElementById('history-container').innerHTML = list.map(s => `
+                    <div class="glass rounded-[30px] p-5 mb-4 text-xs relative">
+                        <div class="flex justify-between font-bold mb-3 items-center">
+                            <span class="text-green-400">${s.start} - ${s.end}</span>
+                            <button onclick="delS(${s.id})" class="text-[10px] text-red-500 bg-red-900/20 px-2 py-1 rounded">KUSTUTA</button>
+                        </div>
+                        <div class="p-4 bg-black/20 rounded-2xl border border-white/5">
+                            <div class="mb-2 text-slate-500 text-[9px] uppercase font-bold">Kõne: ${Math.floor((s.sMs||0)/1000)}s</div>
+                            <audio src="${s.audioClean}" controls class="w-full h-8 opacity-80"></audio>
+                            ${s.note ? `<div class="p-3 bg-black/40 text-[11px] mt-3 rounded-xl text-slate-300 italic text-left">${s.note}</div>` : ''}
+                        </div>
+                    </div>`).join('');
             };
         }
+        window.delS = id => { if(confirm("Kustuta?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id); tx.oncomplete = renderHistory; } };
     </script>
 </body>
 </html>
