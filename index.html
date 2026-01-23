@@ -201,4 +201,47 @@
             const tx = db.transaction("sessions", "readonly");
             tx.objectStore("sessions").get(id).onsuccess = (e) => {
                 const s = e.target.result;
-                const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Peegel Kapsel</title><style>body{background:#020617;color:#e2e8f0;font-family:sans-serif;padding:30px;line-height:1.6;}.card{background:rgba(30,41,59,0.5);border:1px solid rgba(255,255,255,0.1);padding:25px;border-radius:20px;}h1{color:#3b82f6;margin-top:0;}.stat{margin:10px 0;font-family:monospace;}.label{color:#1d4ed8;font-weight:bold;text-transform:uppercase;margin-right:10px;}audio{width:100%;filter:invert(1);margin-top:20px;}.note{background:rgba(0,0,0
+                const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Peegel Kapsel</title><style>body{background:#020617;color:#e2e8f0;font-family:sans-serif;padding:30px;line-height:1.6;}.card{background:rgba(30,41,59,0.5);border:1px solid rgba(255,255,255,0.1);padding:25px;border-radius:20px;}h1{color:#3b82f6;margin-top:0;}.stat{margin:10px 0;font-family:monospace;}.label{color:#1d4ed8;font-weight:bold;text-transform:uppercase;margin-right:10px;}audio{width:100%;filter:invert(1);margin-top:20px;}.note{background:rgba(0,0,0,0.3);padding:15px;border-radius:10px;margin-top:20px;white-space:pre-wrap;border-left:4px solid #3b82f6;}</style></head><body><div class="card"><h1>Sessioon ${s.date}</h1><div class="stat"><span class="label">Aeg:</span>${s.start} - ${s.end}</div><div class="stat"><span class="label">Kõne:</span>${formatTime(s.sMs)}</div><div class="stat"><span class="label">Vaikus:</span>${formatTime(s.vMs)}</div><div class="stat"><span class="label">Sagedus:</span>${s.hzMin} - ${s.hzMax} Hz</div><div class="note">${s.note || "Märkmed puuduvad."}</div><audio controls src="${s.audioClean}"></audio></div></body></html>`;
+                const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([html], {type:'text/html'})); link.download = `Peegel_Kapsel_${s.id}.html`; link.click();
+            };
+        }
+        window.downloadWav = (audio, id) => {
+            const link = document.createElement('a'); link.href = audio; link.download = `Peegel_Audio_${id}.wav`; link.click();
+        }
+
+        function renderHistory() {
+            if(!db) return;
+            const tx = db.transaction("sessions", "readonly");
+            tx.objectStore("sessions").getAll().onsuccess = e => {
+                const list = e.target.result.sort((a,b) => b.id - a.id);
+                document.getElementById('history-container').innerHTML = list.map(s => {
+                    const noteBtn = s.note ? `<button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-1 text-[9px] bg-blue-500/10 rounded-lg text-blue-400 mt-2 uppercase">Märge</button><div class="hidden p-3 bg-black/40 text-xs mt-1 rounded-lg">${s.note}</div>` : '';
+                    const pin = s.isManual ? `<span class="text-amber-400 mr-1">📌</span>` : '';
+                    return `
+                    <div class="glass rounded-[30px] p-5 mb-4">
+                        <div class="flex justify-between items-center text-[11px] uppercase font-bold mb-3">
+                            <span class="flex gap-2 items-center">
+                                <span style="color: #22c55e;">${pin}${s.start}-${s.end}</span>
+                                <span><span style="color: #1d4ed8; font-weight: 900;">Hz</span> <span style="color: #60a5fa;">${s.hzMin}-${s.hzMax}</span></span>
+                            </span>
+                            <button onclick="delS(${s.id})" style="color: #991b1b;">Kustuta</button>
+                        </div>
+                        <div class="p-4 bg-blue-500/5 rounded-2xl">
+                            <div class="flex justify-between text-[9px] font-black uppercase mb-2">
+                                <span><span style="color: #1d4ed8;">VAIKUS:</span> <span style="color: #60a5fa;">${formatTime(s.vMs)}</span></span>
+                                <div class="flex gap-2">
+                                    <button onclick="downloadCapsule(${s.id})" class="text-blue-400">HTML</button>
+                                    <button onclick="downloadWav('${s.audioClean}', ${s.id})" class="text-slate-400">WAV</button>
+                                </div>
+                            </div>
+                            <audio src="${s.audioClean}" controls></audio>
+                            ${noteBtn}
+                        </div>
+                    </div>`;
+                }).join('');
+            };
+        }
+        window.delS = id => { if(confirm("Kustuta?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id); tx.oncomplete = renderHistory; } };
+    </script>
+</body>
+</html>
