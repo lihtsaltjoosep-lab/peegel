@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <title>Peegel Pro v85</title>
+    <title>Peegel Pro v86</title>
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -27,7 +27,7 @@
 
         <div id="setup-screen" class="pt-20 flex flex-col items-center">
             <button onclick="startSession()" class="bg-blue-600 w-36 h-36 rounded-full font-black text-2xl text-white shadow-2xl border-4 border-blue-400 active:scale-90 uppercase">Start</button>
-            <p class="mt-4 text-slate-500 text-xs uppercase tracking-widest">v85: Nupud Korras</p>
+            <p class="mt-4 text-slate-500 text-xs uppercase tracking-widest">v86: Märkenõel (📌)</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4">
@@ -49,7 +49,7 @@
                 <textarea id="note-input" class="w-full bg-transparent text-sm text-slate-200 focus:outline-none placeholder-slate-700 resize-none font-medium h-32 pt-2" placeholder="Kirjuta märkmed siia..." rows="5"></textarea>
             </div>
             <div class="grid grid-cols-2 gap-3">
-                <button onclick="fixSession()" class="bg-blue-600 text-white py-5 rounded-[25px] font-black uppercase text-xs tracking-widest active:scale-95 shadow-lg">Fikseeri</button>
+                <button onclick="fixSession(false, true)" class="bg-blue-600 text-white py-5 rounded-[25px] font-black uppercase text-xs tracking-widest active:scale-95 shadow-lg">Fikseeri</button>
                 <button id="stop-btn" onclick="stopAndSave()" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-black uppercase text-xs active:scale-95">Lõpeta</button>
             </div>
         </div>
@@ -139,16 +139,16 @@
                 document.getElementById('active-session').classList.remove('hidden');
                 sessionStartTime = new Date().toLocaleTimeString('et-EE');
                 isLive = true;
-                autoFixTimer = setInterval(fixSession, AUTO_FIX_MS);
+                autoFixTimer = setInterval(() => fixSession(false, false), AUTO_FIX_MS);
             } catch (err) { alert("Viga!"); }
         }
 
         async function stopAndSave() {
             isLive = false; if (wakeLock) wakeLock.release();
-            clearInterval(autoFixTimer); await fixSession(true); location.reload();
+            clearInterval(autoFixTimer); await fixSession(true, true); location.reload();
         }
 
-        function fixSession(isFinal = false) {
+        function fixSession(isFinal = false, isManual = false) {
             return new Promise((resolve) => {
                 if (speechMs < MIN_SPEECH_TO_SAVE_MS) {
                     if (isFinal) alert("Liiga lühike.");
@@ -169,7 +169,8 @@
                         date: new Date().toLocaleDateString('et-EE'),
                         hzMin: snapStats.min, hzMax: snapStats.max,
                         note: snapNote, audioClean: cleanBase,
-                        sMs: snapStats.s, vMs: snapStats.v
+                        sMs: snapStats.s, vMs: snapStats.v,
+                        isManual: isManual // SALVESTAME INFO
                     });
                     tx.oncomplete = () => { renderHistory(); resolve(); };
                 });
@@ -199,7 +200,6 @@
 
         function toB64(b) { return new Promise(r => { const f = new FileReader(); f.onloadend = () => r(f.result); f.readAsDataURL(b); }); }
 
-        // ALLALAADIMISE FUNKTSIOONID
         window.downloadCapsule = id => {
             const tx = db.transaction("sessions", "readonly");
             tx.objectStore("sessions").get(id).onsuccess = (e) => {
@@ -219,11 +219,14 @@
                 const list = e.target.result.sort((a,b) => b.id - a.id);
                 document.getElementById('history-container').innerHTML = list.map(s => {
                     const noteBtn = s.note ? `<button onclick="this.nextElementSibling.classList.toggle('hidden')" class="w-full py-1 text-[9px] bg-blue-500/10 rounded-lg text-blue-400 mt-2 uppercase">Märge</button><div class="hidden p-3 bg-black/40 text-xs mt-1 rounded-lg">${s.note}</div>` : '';
+                    // Nõel ainult siis kui on isManual: true
+                    const pin = s.isManual ? `<span class="text-amber-400 mr-1" title="Käsitsi fikseeritud">📌</span>` : '';
+                    
                     return `
                     <div class="glass rounded-[30px] p-5 mb-4">
                         <div class="flex justify-between items-center text-[11px] uppercase font-bold mb-3">
-                            <span class="flex gap-2">
-                                <span style="color: #22c55e;">${s.start}-${s.end}</span>
+                            <span class="flex gap-2 items-center">
+                                <span style="color: #22c55e;">${pin}${s.start}-${s.end}</span>
                                 <span><span style="color: #1d4ed8; font-weight: 900;">Hz</span> <span style="color: #60a5fa;">${s.hzMin}-${s.hzMax}</span></span>
                             </span>
                             <button onclick="delS(${s.id})" style="color: #991b1b;">Kustuta</button>
