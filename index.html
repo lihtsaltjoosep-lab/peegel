@@ -10,7 +10,6 @@
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
         .hidden { display: none !important; }
-        
         .play-ring {
             width: 150px; height: 150px; border-radius: 50%;
             background: #1d4ed8; border: 5px solid #f4ead5;
@@ -21,10 +20,8 @@
         .play-ring:active { transform: scale(0.95); }
         .play-icon-svg { width: 50px; height: 50px; fill: #f4ead5; margin-left: 8px; margin-bottom: 5px; }
         .play-text { color: #f4ead5; font-weight: 900; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; }
-
         #status-light { width: 12px; height: 12px; border-radius: 50%; background: #334155; transition: 0.1s; }
         .light-on { background: #22c55e !important; box-shadow: 0 0 10px #22c55e; }
-        
         audio { height: 35px; width: 100%; border-radius: 8px; filter: invert(1) brightness(0.8); margin-top: 5px; }
     </style>
 </head>
@@ -41,7 +38,7 @@
                 <svg class="play-icon-svg" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg>
                 <div class="play-text">Alusta</div>
             </div>
-            <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v33: BACKGROUND AUDIO FIX</p>
+            <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v33.1: ULTIMATE BG FIX</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4 text-left">
@@ -61,27 +58,27 @@
                 </div>
                 <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 placeholder-slate-600 resize-none" placeholder="Kirjuta märkmed siia..."></textarea>
             </div>
-
             <div class="grid grid-cols-2 gap-3">
                 <button onclick="fixNow(true)" class="bg-blue-600 text-white py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95 shadow-lg">Fikseeri</button>
                 <button onclick="stopSession()" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95">Lõpeta</button>
             </div>
         </div>
-
         <div id="history-container" class="space-y-4 pb-24 text-left w-full mt-6"></div>
     </div>
 
     <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').then(reg => {
+                setInterval(() => {
+                    if (reg.active) reg.active.postMessage({ type: 'PING' });
+                }, 1000);
+            });
+        }
+
         const AUTO_SAVE_MS = 10 * 60 * 1000; 
         const SPEECH_THRESHOLD = 0.008;
-
-        let isLive = false, wakeLock = null;
-        let audioCtx, processor, stream;
-        let speechBuffer = []; 
-        let sessionStart = null;
-        let speechMs = 0, silenceMs = 0;
-        let hzMin = 9999, hzMax = 0;
-        let autoSaveTimer;
+        let isLive = false, wakeLock = null, audioCtx, processor, stream, autoSaveTimer;
+        let speechBuffer = [], sessionStart = null, speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0;
 
         let db;
         const dbReq = indexedDB.open("Peegel_v33_Data", 1);
@@ -102,17 +99,16 @@
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 
-                // BACKGROUND FIX: Loo hääletu heli, mis "mängib" taustal
-                const silentHolder = document.createElement('audio');
-                silentHolder.setAttribute('playsinline', '');
-                silentHolder.src = 'data:audio/wav;base64,UklGRigAAABXQVZFRm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
-                silentHolder.loop = true;
-                silentHolder.play().catch(e => console.log("Silent play viga:", e));
+                // --- TAUSTAL TÖÖ TUGEVDUS ---
+                // Tekitame pideva hääletu võnkumise, mis ei lase audioprotsessil uinuda
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                gainNode.gain.value = 0.0001; 
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.start();
 
                 const source = audioCtx.createMediaStreamSource(stream);
-                const gain = audioCtx.createGain(); gain.gain.value = 0.001;
-                source.connect(gain); gain.connect(audioCtx.destination);
-
                 processor = audioCtx.createScriptProcessor(4096, 1, 1);
                 const analyser = audioCtx.createAnalyser();
                 analyser.fftSize = 256;
@@ -123,8 +119,7 @@
                 processor.connect(audioCtx.destination);
 
                 sessionStart = new Date();
-                speechMs = 0; silenceMs = 0; speechBuffer = [];
-                hzMin = 9999; hzMax = 0;
+                speechMs = 0; silenceMs = 0; speechBuffer = []; resetHz();
                 
                 processor.onaudioprocess = (e) => {
                     if (!isLive) return;
@@ -157,11 +152,12 @@
                 document.getElementById('setup-screen').classList.add('hidden');
                 document.getElementById('active-session').classList.remove('hidden');
                 isLive = true;
-
                 autoSaveTimer = setInterval(() => fixNow(false), AUTO_SAVE_MS);
 
             } catch (err) { alert("Viga: " + err); }
         }
+
+        function resetHz() { hzMin = 9999; hzMax = 0; document.getElementById('hz-min').innerText = "-"; document.getElementById('hz-max').innerText = "-"; }
 
         function fixNow(isManual = true) {
             if (speechBuffer.length === 0) return;
@@ -169,21 +165,16 @@
             const clipStart = sessionStart.toLocaleTimeString('et-EE');
             const clipEnd = new Date().toLocaleTimeString('et-EE');
             const currentBuffer = [...speechBuffer];
-            const currentSpeechMs = speechMs;
-            const currentSilenceMs = silenceMs;
-            const cHzMin = hzMin; const cHzMax = hzMax;
+            const stats = { sMs: speechMs, vMs: silenceMs, hMin: hzMin, hMax: hzMax };
 
-            speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0;
+            speechBuffer = []; speechMs = 0; silenceMs = 0; resetHz();
             sessionStart = new Date();
-
             if(isManual) document.getElementById('note-input').value = "";
-            document.getElementById('hz-min').innerText = "-";
-            document.getElementById('hz-max').innerText = "-";
 
-            processAndSave(currentBuffer, clipStart, clipEnd, noteText, currentSpeechMs, currentSilenceMs, cHzMin, cHzMax, isManual);
+            processAndSave(currentBuffer, clipStart, clipEnd, noteText, stats, isManual);
         }
 
-        async function processAndSave(buffer, startT, endT, note, sMs, vMs, hMin, hMax, isManual) {
+        async function processAndSave(buffer, startT, endT, note, stats, isManual) {
             const sr = audioCtx.sampleRate;
             const length = buffer.reduce((a, c) => a + c.length, 0);
             const wavBuffer = new ArrayBuffer(44 + length * 2);
@@ -202,20 +193,14 @@
                     offset += 2;
                 }
             }
-
             const blob = new Blob([wavBuffer], { type: 'audio/wav' });
             const reader = new FileReader();
             reader.readAsDataURL(blob);
             reader.onloadend = () => {
                 const tx = db.transaction("sessions", "readwrite");
                 tx.objectStore("sessions").add({
-                    id: Date.now(),
-                    start: startT, end: endT,
-                    date: new Date().toLocaleDateString('et-EE'),
-                    note: note,
-                    audio: reader.result,
-                    stats: { sMs, vMs, hMin, hMax },
-                    isManual: isManual // Märge, kas salvestati käsitsi
+                    id: Date.now(), start: startT, end: endT, date: new Date().toLocaleDateString('et-EE'),
+                    note: note, audio: reader.result, stats: stats, isManual: isManual
                 });
                 tx.oncomplete = renderHistory;
             };
@@ -225,7 +210,7 @@
             fixNow(true); isLive = false;
             clearInterval(autoSaveTimer);
             if(wakeLock) wakeLock.release();
-            setTimeout(() => location.reload(), 1000);
+            setTimeout(() => location.reload(), 500);
         }
 
         function renderHistory() {
@@ -234,31 +219,23 @@
             tx.objectStore("sessions").getAll().onsuccess = e => {
                 const list = e.target.result.sort((a,b) => b.id - a.id);
                 document.getElementById('history-container').innerHTML = list.map(s => {
-                    const durSpeech = formatTime(s.stats.sMs);
-                    const durSilence = formatTime(s.stats.vMs);
-                    const hzInfo = (s.stats.hMax > 0) ? `${s.stats.hMin}-${s.stats.hMax} Hz` : '';
-                    // Märkenõela kuvamine ainult käsitsi salvestatud sessioonil
                     const pin = s.isManual ? '<span style="color:#fbbf24; font-size: 16px; margin-right: 8px;">📍</span>' : '';
-
-                    return `
-                    <div class="glass rounded-[30px] p-5 mb-4 text-xs relative">
+                    return `<div class="glass rounded-[30px] p-5 mb-4 text-xs relative">
                         <div class="flex justify-between font-bold mb-3 items-center">
                             <span class="text-green-400 text-[14px] flex items-center">${pin}${s.start} - ${s.end}</span>
                             <button onclick="delS(${s.id})" class="text-[10px] text-red-500 bg-red-900/20 px-3 py-1 rounded-full uppercase">Kustuta</button>
                         </div>
                         <div class="flex justify-between text-[10px] text-slate-400 uppercase font-bold mb-2">
-                            <span>Kõne: <span class="text-slate-200">${durSpeech}</span></span>
-                            <span>Vaikus: <span class="text-blue-400">${durSilence}</span></span>
-                            <span class="text-amber-500">${hzInfo}</span>
+                            <span>Kõne: <span class="text-slate-200">${formatTime(s.stats.sMs)}</span></span>
+                            <span>Vaikus: <span class="text-blue-400">${formatTime(s.stats.vMs)}</span></span>
+                            <span class="text-amber-500">${s.stats.hMin}-${s.stats.hMax} Hz</span>
                         </div>
-                        <div class="bg-black/20 rounded-2xl border border-white/5 p-2">
-                            <audio src="${s.audio}" controls class="w-full h-8 opacity-90"></audio>
-                        </div>
+                        <audio src="${s.audio}" controls class="w-full opacity-90"></audio>
                         <div class="mt-2 text-right">
                             <a href="${s.audio}" download="Peegel_${s.id}.wav" class="text-blue-400 underline mr-4">WAV</a>
                             <button onclick="downloadHTML(${s.id})" class="text-amber-400 underline">HTML</button>
                         </div>
-                        ${s.note ? `<details class="mt-2"><summary class="text-slate-500 cursor-pointer">Vaata märkmeid</summary><div class="p-3 bg-black/40 text-[11px] mt-2 rounded-xl text-slate-300 italic text-left">${s.note}</div></details>` : ''}
+                        ${s.note ? `<details class="mt-2"><summary class="text-slate-500 cursor-pointer">Märkmed</summary><div class="p-3 bg-black/40 text-[11px] mt-2 rounded-xl text-slate-300 italic text-left">${s.note}</div></details>` : ''}
                     </div>`;
                 }).join('');
             };
