@@ -4,14 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="manifest" href="manifest.json">
-    <title>Peegel v32</title>
+    <title>Peegel v33</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
         .hidden { display: none !important; }
         
-        /* DISAIN - SEEPIA PLAY RING */
         .play-ring {
             width: 150px; height: 150px; border-radius: 50%;
             background: #1d4ed8; border: 5px solid #f4ead5;
@@ -23,11 +22,9 @@
         .play-icon-svg { width: 50px; height: 50px; fill: #f4ead5; margin-left: 8px; margin-bottom: 5px; }
         .play-text { color: #f4ead5; font-weight: 900; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; }
 
-        /* INDIKAATORID */
         #status-light { width: 12px; height: 12px; border-radius: 50%; background: #334155; transition: 0.1s; }
         .light-on { background: #22c55e !important; box-shadow: 0 0 10px #22c55e; }
         
-        /* AUDIO PLAYER DISAIN */
         audio { height: 35px; width: 100%; border-radius: 8px; filter: invert(1) brightness(0.8); margin-top: 5px; }
     </style>
 </head>
@@ -44,13 +41,11 @@
                 <svg class="play-icon-svg" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg>
                 <div class="play-text">Alusta</div>
             </div>
-            <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v32: STABIILNE BAAS</p>
-            <p class="text-slate-700 text-[10px] mt-2">Ekraan hoitakse aktiivsena</p>
+            <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v33: BACKGROUND AUDIO FIX</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4 text-left">
             <div class="glass rounded-[35px] p-6 space-y-4 border-t border-blue-500/20 shadow-2xl">
-                
                 <div class="flex justify-between items-center border-b border-white/5 pb-3">
                     <div class="flex items-center gap-4">
                         <div id="status-light"></div>
@@ -64,12 +59,11 @@
                         <div class="font-mono text-xs font-bold text-amber-500"><span id="hz-min">-</span> / <span id="hz-max">-</span></div>
                     </div>
                 </div>
-
                 <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 placeholder-slate-600 resize-none" placeholder="Kirjuta märkmed siia..."></textarea>
             </div>
 
             <div class="grid grid-cols-2 gap-3">
-                <button onclick="fixNow()" class="bg-blue-600 text-white py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95 shadow-lg">Fikseeri</button>
+                <button onclick="fixNow(true)" class="bg-blue-600 text-white py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95 shadow-lg">Fikseeri</button>
                 <button onclick="stopSession()" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95">Lõpeta</button>
             </div>
         </div>
@@ -78,22 +72,19 @@
     </div>
 
     <script>
-        // --- KONFIGURATSIOON v32 ---
         const AUTO_SAVE_MS = 10 * 60 * 1000; 
         const SPEECH_THRESHOLD = 0.008;
 
         let isLive = false, wakeLock = null;
         let audioCtx, processor, stream;
         let speechBuffer = []; 
-        
         let sessionStart = null;
         let speechMs = 0, silenceMs = 0;
         let hzMin = 9999, hzMax = 0;
         let autoSaveTimer;
 
-        // --- ANDMEBAAS ---
         let db;
-        const dbReq = indexedDB.open("Peegel_v32_Data", 1);
+        const dbReq = indexedDB.open("Peegel_v33_Data", 1);
         dbReq.onupgradeneeded = e => {
             const d = e.target.result;
             if (!d.objectStoreNames.contains('sessions')) d.createObjectStore('sessions', { keyPath: 'id' });
@@ -102,24 +93,21 @@
 
         setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }, 1000);
 
-        // --- ALUSTAMINE ---
         async function startSession() {
             try {
-                // WakeLock - hoiab ekraani ja protsessi ärvel
                 if ('wakeLock' in navigator) {
-                    try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) { console.log(e); }
+                    try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
                 }
 
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 
-                // --- TAUSTAL TÖÖ HOIDJA (SILENT AUDIO) ---
-                // See trikk hoiab iOS-is ja Androidis mikrofoni lahti ka siis, kui ekraan on lukus
-                const silentPlayer = document.createElement('audio');
-                silentPlayer.setAttribute('playsinline', '');
-                silentPlayer.src = 'data:audio/wav;base64,UklGRigAAABXQVZFRm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
-                silentPlayer.loop = true;
-                silentPlayer.play();
+                // BACKGROUND FIX: Loo hääletu heli, mis "mängib" taustal
+                const silentHolder = document.createElement('audio');
+                silentHolder.setAttribute('playsinline', '');
+                silentHolder.src = 'data:audio/wav;base64,UklGRigAAABXQVZFRm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+                silentHolder.loop = true;
+                silentHolder.play().catch(e => console.log("Silent play viga:", e));
 
                 const source = audioCtx.createMediaStreamSource(stream);
                 const gain = audioCtx.createGain(); gain.gain.value = 0.001;
@@ -141,12 +129,10 @@
                 processor.onaudioprocess = (e) => {
                     if (!isLive) return;
                     const input = e.inputBuffer.getChannelData(0);
-                    
                     analyser.getByteFrequencyData(dataArray);
                     let maxVal = -1, maxIdx = -1;
                     for (let i = 0; i < dataArray.length; i++) { if (dataArray[i] > maxVal) { maxVal = dataArray[i]; maxIdx = i; } }
                     const hz = Math.round(maxIdx * (audioCtx.sampleRate/2) / dataArray.length);
-                    
                     let sum = 0;
                     for(let i=0; i<input.length; i++) sum += input[i]*input[i];
                     const rms = Math.sqrt(sum/input.length);
@@ -154,10 +140,8 @@
                     if (rms > SPEECH_THRESHOLD) {
                         speechMs += (4096 / audioCtx.sampleRate) * 1000;
                         document.getElementById('status-light').classList.add('light-on');
-                        
                         if(hz > 50) {
-                            if(hz < hzMin) hzMin = hz;
-                            if(hz > hzMax) hzMax = hz;
+                            if(hz < hzMin) hzMin = hz; if(hz > hzMax) hzMax = hz;
                             document.getElementById('hz-min').innerText = hzMin;
                             document.getElementById('hz-max').innerText = hzMax;
                         }
@@ -166,7 +150,6 @@
                         silenceMs += (4096 / audioCtx.sampleRate) * 1000;
                         document.getElementById('status-light').classList.remove('light-on');
                     }
-                    
                     document.getElementById('speech-timer').innerText = formatTime(speechMs);
                     document.getElementById('silence-timer').innerText = formatTime(silenceMs);
                 };
@@ -180,43 +163,37 @@
             } catch (err) { alert("Viga: " + err); }
         }
 
-        // --- SALVESTAMINE ---
         function fixNow(isManual = true) {
             if (speechBuffer.length === 0) return;
-
             const noteText = document.getElementById('note-input').value;
             const clipStart = sessionStart.toLocaleTimeString('et-EE');
             const clipEnd = new Date().toLocaleTimeString('et-EE');
-            
             const currentBuffer = [...speechBuffer];
             const currentSpeechMs = speechMs;
             const currentSilenceMs = silenceMs;
             const cHzMin = hzMin; const cHzMax = hzMax;
 
-            speechBuffer = [];
-            speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0;
+            speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0;
             sessionStart = new Date();
 
             if(isManual) document.getElementById('note-input').value = "";
             document.getElementById('hz-min').innerText = "-";
             document.getElementById('hz-max').innerText = "-";
 
-            processAndSave(currentBuffer, clipStart, clipEnd, noteText, currentSpeechMs, currentSilenceMs, cHzMin, cHzMax);
+            processAndSave(currentBuffer, clipStart, clipEnd, noteText, currentSpeechMs, currentSilenceMs, cHzMin, cHzMax, isManual);
         }
 
-        async function processAndSave(buffer, startT, endT, note, sMs, vMs, hMin, hMax) {
+        async function processAndSave(buffer, startT, endT, note, sMs, vMs, hMin, hMax, isManual) {
             const sr = audioCtx.sampleRate;
             const length = buffer.reduce((a, c) => a + c.length, 0);
             const wavBuffer = new ArrayBuffer(44 + length * 2);
             const view = new DataView(wavBuffer);
-            
             const writeS = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
             writeS(0, 'RIFF'); view.setUint32(4, 32 + length * 2, true); writeS(8, 'WAVE'); writeS(12, 'fmt ');
             view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
             view.setUint32(24, sr, true); view.setUint32(28, sr * 2, true);
             view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeS(36, 'data');
             view.setUint32(40, length * 2, true);
-            
             let offset = 44;
             for (let chunk of buffer) {
                 for (let i = 0; i < chunk.length; i++) {
@@ -237,15 +214,15 @@
                     date: new Date().toLocaleDateString('et-EE'),
                     note: note,
                     audio: reader.result,
-                    stats: { sMs, vMs, hMin, hMax }
+                    stats: { sMs, vMs, hMin, hMax },
+                    isManual: isManual // Märge, kas salvestati käsitsi
                 });
                 tx.oncomplete = renderHistory;
             };
         }
 
         function stopSession() {
-            fixNow(true);
-            isLive = false;
+            fixNow(true); isLive = false;
             clearInterval(autoSaveTimer);
             if(wakeLock) wakeLock.release();
             setTimeout(() => location.reload(), 1000);
@@ -260,12 +237,14 @@
                     const durSpeech = formatTime(s.stats.sMs);
                     const durSilence = formatTime(s.stats.vMs);
                     const hzInfo = (s.stats.hMax > 0) ? `${s.stats.hMin}-${s.stats.hMax} Hz` : '';
+                    // Märkenõela kuvamine ainult käsitsi salvestatud sessioonil
+                    const pin = s.isManual ? '<span style="color:#fbbf24; font-size: 16px; margin-right: 8px;">📍</span>' : '';
 
                     return `
                     <div class="glass rounded-[30px] p-5 mb-4 text-xs relative">
                         <div class="flex justify-between font-bold mb-3 items-center">
-                            <span class="text-green-400 text-[14px]">${s.start} - ${s.end}</span>
-                            <button onclick="delS(${s.id})" class="text-[10px] text-red-500 bg-red-900/20 px-3 py-1 rounded-full">KUSTUTA</button>
+                            <span class="text-green-400 text-[14px] flex items-center">${pin}${s.start} - ${s.end}</span>
+                            <button onclick="delS(${s.id})" class="text-[10px] text-red-500 bg-red-900/20 px-3 py-1 rounded-full uppercase">Kustuta</button>
                         </div>
                         <div class="flex justify-between text-[10px] text-slate-400 uppercase font-bold mb-2">
                             <span>Kõne: <span class="text-slate-200">${durSpeech}</span></span>
@@ -286,26 +265,18 @@
         }
 
         function formatTime(ms) {
-            const s = Math.floor(ms / 1000);
-            const m = Math.floor(s / 60);
-            const sec = s % 60;
+            const s = Math.floor(ms / 1000); const m = Math.floor(s / 60); const sec = s % 60;
             return `${m}m ${sec}s`;
         }
 
         window.delS = id => { if(confirm("Kustuta?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id); tx.oncomplete = renderHistory; } };
-        
         window.downloadHTML = id => {
             const tx = db.transaction("sessions", "readonly");
             tx.objectStore("sessions").get(id).onsuccess = (e) => {
                 const s = e.target.result;
-                const htmlContent = `
-                    <html><head><title>Peegel ${s.date}</title></head>
-                    <body style="background:#111;color:#eee;font-family:sans-serif;padding:20px;">
-                        <h1>Sessioon: ${s.start} - ${s.end}</h1>
-                        <p>Kõne: ${formatTime(s.stats.sMs)} | Vaikus: ${formatTime(s.stats.vMs)}</p>
-                        <audio controls src="${s.audio}"></audio>
-                        <h3>Märkmed:</h3><p>${s.note || "-"}</p>
-                    </body></html>`;
+                const htmlContent = `<html><body style="background:#111;color:#eee;font-family:sans-serif;padding:20px;">
+                    <h1>Sessioon: ${s.start} - ${s.end}</h1><audio controls src="${s.audio}"></audio>
+                    <h3>Märkmed:</h3><p>${s.note || "-"}</p></body></html>`;
                 const blob = new Blob([htmlContent], {type: 'text/html'});
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a'); a.href = url; a.download = `Sessioon_${s.id}.html`; a.click();
