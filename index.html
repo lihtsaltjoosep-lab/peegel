@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="manifest" href="manifest.json">
-    <title>Peegel v37</title>
+    <title>Peegel v38</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -38,7 +38,7 @@
                 <svg class="play-icon-svg" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg>
                 <div class="play-text">Alusta</div>
             </div>
-            <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v37: 30MIN CONTINUOUS BUFFER</p>
+            <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v38: 30MIN BUFFER + STATS</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4 text-left">
@@ -46,8 +46,8 @@
                 <div class="flex justify-between items-center border-b border-white/5 pb-3">
                     <div class="flex items-center gap-4">
                         <div id="status-light"></div>
-                        <div class="font-mono text-xs font-bold text-blue-400 uppercase">
-                            Salvestab... <span id="buffer-size">0</span> min mälus
+                        <div class="font-mono text-[10px] text-blue-400 uppercase">
+                            Buffer: <span id="buffer-size">0</span> min
                         </div>
                     </div>
                     <div class="text-right">
@@ -61,7 +61,7 @@
                 <button id="fix-btn" onclick="handleFixClick()" class="bg-blue-600 text-white py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95 shadow-lg">Fikseeri</button>
                 <button onclick="stopSession()" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95">Lõpeta</button>
             </div>
-            <p id="fix-status" class="text-[10px] text-center text-slate-500 uppercase font-bold"></p>
+            <p id="fix-status" class="text-[10px] text-center text-amber-500 uppercase font-bold h-4"></p>
         </div>
 
         <div id="history-container" class="space-y-4 pb-24 text-left w-full mt-6"></div>
@@ -73,9 +73,13 @@
         let isLive = false, wakeLock = null, audioCtx, analyser, stream, mediaRecorder;
         let bufferChunks = []; 
         let clickCount = 0, clickTimer = null;
+        
+        // Mõõdikud puhvri jaoks
+        let speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0;
+        const SPEECH_THRESHOLD = 0.005;
 
         let db;
-        const dbReq = indexedDB.open("Peegel_v37_Data", 1);
+        const dbReq = indexedDB.open("Peegel_v38_Data", 1);
         dbReq.onupgradeneeded = e => {
             const d = e.target.result;
             if (!d.objectStoreNames.contains('sessions')) d.createObjectStore('sessions', { keyPath: 'id' });
@@ -90,19 +94,21 @@
 
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 
-                // PIDEV SALVESTUS (MediaRecorder on stabiilne taustal)
+                // TAUSTA HOIDJA (Silent Audio Loop)
+                const silent = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFRm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+                silent.loop = true; silent.play();
+
+                // PIDEV SALVESTUS (MediaRecorder on stabiilseim taustal)
                 mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
                 mediaRecorder.ondataavailable = e => {
                     if (e.data.size > 0) {
                         bufferChunks.push(e.data);
-                        // Hoiame puhvri max 30 minutit (1 jupp = 10 sek, 30 min = 180 juppi)
-                        if (bufferChunks.length > 180) bufferChunks.shift();
+                        if (bufferChunks.length > 180) bufferChunks.shift(); // Max 30 min (10s jupid)
                         updateBufferUI();
                     }
                 };
-                mediaRecorder.start(10000); // Kogume 10-sekundilisi juppe
+                mediaRecorder.start(10000); 
 
-                // Visuaalne indikaator ja Hz
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioCtx.createMediaStreamSource(stream);
                 analyser = audioCtx.createAnalyser();
@@ -116,17 +122,27 @@
                     if (!isLive) return;
                     analyser.getByteFrequencyData(dataArray);
                     let maxVal = -1, maxIdx = -1;
+                    let sum = 0;
                     for (let i = 0; i < dataArray.length; i++) {
+                        sum += dataArray[i];
                         if (dataArray[i] > maxVal) { maxVal = dataArray[i]; maxIdx = i; }
                     }
-                    if (maxVal > 50) {
+                    
+                    const avg = sum / dataArray.length;
+                    const hz = Math.round(maxIdx * (audioCtx.sampleRate/2) / dataArray.length);
+
+                    if (avg > 10) { // Tundlikkuslävi indikaatorile
+                        speechMs += 50; 
                         document.getElementById('status-light').classList.add('light-on');
-                        const hz = Math.round(maxIdx * (audioCtx.sampleRate/2) / dataArray.length);
-                        document.getElementById('hz-display').innerText = hz + " Hz";
+                        if(hz > 50) {
+                            if(hz < hzMin) hzMin = hz; if(hz > hzMax) hzMax = hz;
+                            document.getElementById('hz-display').innerText = hz + " Hz";
+                        }
                     } else {
+                        silenceMs += 50;
                         document.getElementById('status-light').classList.remove('light-on');
                     }
-                    requestAnimationFrame(analyze);
+                    setTimeout(() => requestAnimationFrame(analyze), 50);
                 }
                 analyze();
 
@@ -144,20 +160,17 @@
         function handleFixClick() {
             clickCount++;
             if (clickTimer) clearTimeout(clickTimer);
-            
-            document.getElementById('fix-status').innerText = clickCount === 1 ? "Ootan teist vajutust (30m)..." : "Fikseerin 30 minutit!";
+            document.getElementById('fix-status').innerText = clickCount === 1 ? "15 MIN?" : "30 MIN!";
             
             clickTimer = setTimeout(() => {
-                const minsToSave = clickCount === 1 ? 15 : 30;
-                fixNow(minsToSave);
+                fixNow(clickCount === 1 ? 15 : 30);
                 clickCount = 0;
-                document.getElementById('fix-status').innerText = "";
+                setTimeout(() => { document.getElementById('fix-status').innerText = ""; }, 2000);
             }, 800);
         }
 
         async function fixNow(minutes) {
             if (bufferChunks.length === 0) return;
-            
             const chunksNeeded = (minutes * 60) / 10;
             const selectedChunks = bufferChunks.slice(-chunksNeeded);
             const blob = new Blob(selectedChunks, { type: 'audio/webm' });
@@ -173,16 +186,23 @@
                 const tx = db.transaction("sessions", "readwrite");
                 tx.objectStore("sessions").add({
                     id: Date.now(),
-                    start: startT,
-                    end: endT,
+                    start: startT, end: endT,
                     date: now.toLocaleDateString('et-EE'),
                     note: noteText,
                     audio: reader.result,
                     isManual: true,
+                    stats: { 
+                        sMs: speechMs, 
+                        vMs: silenceMs, 
+                        hMin: hzMin === 9999 ? 0 : hzMin, 
+                        hMax: hzMax 
+                    },
                     type: minutes + " min"
                 });
                 tx.oncomplete = renderHistory;
                 document.getElementById('note-input').value = "";
+                // Nullime sessiooni mõõdikud pärast fikseerimist
+                speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0;
             };
         }
 
@@ -199,23 +219,31 @@
             tx.objectStore("sessions").getAll().onsuccess = e => {
                 const list = e.target.result.sort((a,b) => b.id - a.id);
                 document.getElementById('history-container').innerHTML = list.map(s => {
+                    const durS = Math.floor(s.stats.sMs / 1000 / 60) + "m " + Math.floor((s.stats.sMs / 1000) % 60) + "s";
+                    const durV = Math.floor(s.stats.vMs / 1000 / 60) + "m " + Math.floor((s.stats.vMs / 1000) % 60) + "s";
+                    
                     return `
-                    <div class="glass rounded-[30px] p-5 mb-4 text-xs relative border-l-4 border-blue-500">
+                    <div class="glass rounded-[30px] p-5 mb-4 text-xs relative border-l-4 border-blue-500 shadow-xl">
                         <div class="flex justify-between font-bold mb-3 items-center">
                             <span class="text-green-400 text-[14px]">📍 ${s.type} | ${s.start} - ${s.end}</span>
                             <button onclick="delS(${s.id})" class="text-[10px] text-red-500 bg-red-900/20 px-3 py-1 rounded-full uppercase">Kustuta</button>
                         </div>
+                        <div class="flex justify-between text-[10px] text-slate-400 uppercase font-bold mb-3 tracking-tighter">
+                            <span>Kõne: <span class="text-slate-200">${durS}</span></span>
+                            <span>Vaikus: <span class="text-blue-400">${durV}</span></span>
+                            <span class="text-amber-500">${s.stats.hMin}-${s.stats.hMax} Hz</span>
+                        </div>
                         <audio src="${s.audio}" controls class="w-full opacity-90"></audio>
                         <div class="mt-2 text-right">
-                            <a href="${s.audio}" download="Peegel_${s.id}.webm" class="text-blue-400 underline mr-4 font-bold">LAAI ALLA (.WEBM)</a>
+                            <a href="${s.audio}" download="Peegel_${s.id}.webm" class="text-blue-400 underline mr-4 font-bold text-[10px]">LAAI ALLA (.WEBM)</a>
                         </div>
-                        ${s.note ? `<details class="mt-2" open><summary class="text-slate-500 cursor-pointer">Märkmed</summary><div class="p-3 bg-black/40 text-[11px] mt-2 rounded-xl text-slate-300 italic text-left">${s.note}</div></details>` : ''}
+                        ${s.note ? `<details class="mt-2" open><summary class="text-slate-500 cursor-pointer">Märkmed</summary><div class="p-3 bg-black/40 text-[11px] mt-2 rounded-xl text-slate-300 italic text-left border-l border-white/10">${s.note}</div></details>` : ''}
                     </div>`;
                 }).join('');
             };
         }
 
-        window.delS = id => { if(confirm("Kustuta?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id); tx.oncomplete = renderHistory; } };
+        window.delS = id => { if(confirm("Kustuta see salvestus?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id); tx.oncomplete = renderHistory; } };
     </script>
 </body>
 </html>
