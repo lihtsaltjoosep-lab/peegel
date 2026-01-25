@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="manifest" href="manifest.json">
-    <title>Peegel v39</title>
+    <title>Peegel v40</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -38,7 +38,7 @@
                 <svg class="play-icon-svg" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg>
                 <div class="play-text">Alusta</div>
             </div>
-            <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v39: 1.5H BUFFER & SMART TIME</p>
+            <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v40: 30MIN & SMART CLOCK</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4 text-left">
@@ -47,7 +47,7 @@
                     <div class="flex items-center gap-4">
                         <div id="status-light"></div>
                         <div class="font-mono text-[10px] text-blue-400 uppercase">
-                            Buffer: <span id="buffer-size">0</span> min
+                            Mälus: <span id="buffer-size">0</span> min
                         </div>
                     </div>
                     <div class="text-right">
@@ -73,12 +73,12 @@
         let isLive = false, wakeLock = null, audioCtx, analyser, stream, mediaRecorder;
         let bufferChunks = []; 
         let clickCount = 0, clickTimer = null;
-        let actualSessionStart = null;
+        let actualStartTime = null; // Sessiooni alguse kellaaeg
         
         let speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0;
 
         let db;
-        const dbReq = indexedDB.open("Peegel_v39_Data", 1);
+        const dbReq = indexedDB.open("Peegel_v40_Data", 1);
         dbReq.onupgradeneeded = e => {
             const d = e.target.result;
             if (!d.objectStoreNames.contains('sessions')) d.createObjectStore('sessions', { keyPath: 'id' });
@@ -100,8 +100,8 @@
                 mediaRecorder.ondataavailable = e => {
                     if (e.data.size > 0) {
                         bufferChunks.push(e.data);
-                        // 1.5 tunni puhver: 90 min * 6 jupikest (10s igaüks) = 540 jupikest
-                        if (bufferChunks.length > 540) bufferChunks.shift();
+                        // 30 minuti puhver: 30 min * 6 jupikest (10s igaüks) = 180 jupikest
+                        if (bufferChunks.length > 180) bufferChunks.shift();
                         updateBufferUI();
                     }
                 };
@@ -115,7 +115,7 @@
 
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
                 isLive = true;
-                actualSessionStart = new Date(); // Fikseerime päris alguse
+                actualStartTime = new Date(); // Salvestame hetke, mil vajutati "Alusta"
 
                 function analyze() {
                     if (!isLive) return;
@@ -177,14 +177,13 @@
             const noteText = document.getElementById('note-input').value;
             const now = new Date();
             
-            // Nutikas ajaarvutus:
-            // Kui sessioon on kestnud vähem kui soovitud minutid, võta päris algus.
-            let startTimeDate = new Date(now.getTime() - (minutes * 60000));
-            if (startTimeDate < actualSessionStart) {
-                startTimeDate = actualSessionStart;
-            }
+            // --- NUTIKAS AJAARVUTUS ---
+            // Arvutame, millal on soovitud "algus" (nt -15 min)
+            let calculatedStart = new Date(now.getTime() - (minutes * 60000));
+            // Kui see aeg on varasem kui sessiooni tegelik algus, siis kasutame tegelikku algust
+            let finalStart = calculatedStart < actualStartTime ? actualStartTime : calculatedStart;
 
-            const startT = startTimeDate.toLocaleTimeString('et-EE');
+            const startT = finalStart.toLocaleTimeString('et-EE');
             const endT = now.toLocaleTimeString('et-EE');
 
             const reader = new FileReader();
@@ -203,12 +202,11 @@
                         vMs: silenceMs, 
                         hMin: hzMin === 9999 ? 0 : hzMin, 
                         hMax: hzMax 
-                    },
-                    type: minutes + " min (või max)"
+                    }
                 });
                 tx.oncomplete = renderHistory;
                 document.getElementById('note-input').value = "";
-                // Mõõdikud nullime ainult fikseeritud osa kohta
+                // Nullime sessiooni mõõdikud, et uuel fikseerimisel uut infot näha
                 speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0;
             };
         }
