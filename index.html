@@ -27,7 +27,7 @@
 </head>
 <body class="p-4 min-h-screen flex flex-col items-center">
     
-    <div class="w-full max-w-md space-y-4 text-center">
+    <div class="w-full max-md space-y-4 text-center">
         <div class="flex justify-between items-center p-2">
             <h1 class="text-3xl font-black italic uppercase text-blue-500">Peegel</h1>
             <div id="clock" class="text-xl font-light text-amber-600">00:00:00</div>
@@ -38,7 +38,7 @@
                 <svg class="play-icon-svg" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg>
                 <div class="play-text">Alusta</div>
             </div>
-            <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v33.1: ULTIMATE BG FIX</p>
+            <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v33.2: PERSISTENCE ENGINE</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4 text-left">
@@ -67,17 +67,14 @@
     </div>
 
     <script>
+        // Registreerime Service Workeri püsivuse jaoks
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').then(reg => {
-                setInterval(() => {
-                    if (reg.active) reg.active.postMessage({ type: 'PING' });
-                }, 1000);
-            });
+            navigator.serviceWorker.register('sw.js');
         }
 
         const AUTO_SAVE_MS = 10 * 60 * 1000; 
         const SPEECH_THRESHOLD = 0.008;
-        let isLive = false, wakeLock = null, audioCtx, processor, stream, autoSaveTimer;
+        let isLive = false, wakeLock = null, audioCtx, processor, stream, autoSaveTimer, keepAliveInt;
         let speechBuffer = [], sessionStart = null, speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0;
 
         let db;
@@ -92,6 +89,7 @@
 
         async function startSession() {
             try {
+                // WakeLock taotlus
                 if ('wakeLock' in navigator) {
                     try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
                 }
@@ -99,14 +97,19 @@
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 
-                // --- TAUSTAL TÖÖ TUGEVDUS ---
-                // Tekitame pideva hääletu võnkumise, mis ei lase audioprotsessil uinuda
-                const oscillator = audioCtx.createOscillator();
-                const gainNode = audioCtx.createGain();
-                gainNode.gain.value = 0.0001; 
-                oscillator.connect(gainNode);
-                gainNode.connect(audioCtx.destination);
-                oscillator.start();
+                // --- TAUSTAL TÖÖ HOIDJA ---
+                // Mängime hääletut loopi, et süsteem arvaks, et äpp on meediapleier
+                const silent = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFRm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+                silent.loop = true;
+                silent.play();
+
+                // Web Lock API - takistab brauseril vahelehe uinutamist
+                if (navigator.locks) {
+                    navigator.locks.request('peegel_mic_keepalive', { mode: 'exclusive' }, async () => {
+                        console.log("Lock active");
+                        await new Promise(() => {}); // Hoiame locki igavesti lahti
+                    });
+                }
 
                 const source = audioCtx.createMediaStreamSource(stream);
                 processor = audioCtx.createScriptProcessor(4096, 1, 1);
@@ -153,6 +156,13 @@
                 document.getElementById('active-session').classList.remove('hidden');
                 isLive = true;
                 autoSaveTimer = setInterval(() => fixNow(false), AUTO_SAVE_MS);
+
+                // Pingime service workerit püsivuse hoidmiseks
+                keepAliveInt = setInterval(() => {
+                    if (navigator.serviceWorker.controller) {
+                        navigator.serviceWorker.controller.postMessage('ping');
+                    }
+                }, 20000);
 
             } catch (err) { alert("Viga: " + err); }
         }
@@ -208,7 +218,7 @@
 
         function stopSession() {
             fixNow(true); isLive = false;
-            clearInterval(autoSaveTimer);
+            clearInterval(autoSaveTimer); clearInterval(keepAliveInt);
             if(wakeLock) wakeLock.release();
             setTimeout(() => location.reload(), 500);
         }
