@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.json">
-    <title>Peegel v32.9.11</title>
+    <title>Peegel v32.9.12</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root { --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); }
@@ -27,8 +27,8 @@
         #status-light { width: 12px; height: 12px; border-radius: 50%; background: #334155; transition: 0.1s; }
         .light-on { background: #22c55e !important; box-shadow: 0 0 10px #22c55e; }
         audio { height: 35px; width: 100%; filter: invert(1); margin-top: 5px; opacity: 0.8; }
-        .steel-blue { color: #60a5fa; opacity: 0.8; } /* Gramm tumedam helesinisest */
-        .dark-orange { color: #ea580c; } /* Tumedam oranž */
+        .steel-blue { color: #60a5fa; opacity: 0.8; }
+        .dark-orange { color: #ea580c; }
     </style>
 </head>
 <body onclick="window.scrollTo(0, 0);">
@@ -40,7 +40,7 @@
     <div class="main-scroll">
         <div class="w-full max-w-md mx-auto space-y-6 text-center">
             <div class="flex justify-between items-center p-2"><h1 class="text-3xl font-black italic uppercase text-blue-500">Peegel</h1><div id="clock" class="text-xl font-light text-amber-600">00:00:00</div></div>
-            <div id="setup-screen" class="pt-20 pb-8 flex flex-col items-center"><div onclick="startSession()" class="play-ring"><svg class="w-12 h-12 ml-2 mb-1 fill-[#f4ead5]" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg><div class="text-[#f4ead5] font-black text-sm uppercase tracking-widest mt-1">Alusta</div></div><p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v32.9.11 • LOG READY</p></div>
+            <div id="setup-screen" class="pt-20 pb-8 flex flex-col items-center"><div onclick="startSession()" class="play-ring"><svg class="w-12 h-12 ml-2 mb-1 fill-[#f4ead5]" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg><div class="text-[#f4ead5] font-black text-sm uppercase tracking-widest mt-1">Alusta</div></div><p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v32.9.12 • STABLE</p></div>
             
             <div id="active-session" class="hidden space-y-4 text-left"><div class="flex justify-end pr-2"><button onclick="toggleBlackout()" class="text-[10px] font-bold text-slate-500 uppercase bg-slate-800/30 px-3 py-1 rounded-full border border-white/5">Pimenda</button></div>
                 <div class="glass rounded-[35px] p-6 space-y-4 border-t border-blue-500/20 shadow-2xl"><div class="flex justify-between items-center border-b border-white/5 pb-3"><div class="flex items-center gap-4"><div id="status-light"></div><div class="font-mono text-xs font-bold uppercase"><div class="text-green-400">Kõne: <span id="speech-timer">00:00</span></div><div class="text-blue-400">Paus: <span id="silence-timer">00:00</span></div></div></div><div class="text-right"><div class="text-[10px] text-slate-500 font-bold uppercase">HZ</div><div class="font-mono text-xs font-bold text-amber-500"><span id="hz-min">-</span> / <span id="hz-max">-</span></div></div></div><textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 placeholder-slate-600 resize-none" placeholder="Kirjuta märkmed siia..."></textarea></div>
@@ -54,15 +54,15 @@
         let audioCtx, processor, stream, speechBuffer = [], sessionStart = null;
         let speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0, autoSaveTimer;
 
-        const THRESHOLD = 0.003; 
-        const PADDING_MS = 600; 
+        // SEADISTUSED - Tagasi turvalisema ja sujuvama peale
+        const THRESHOLD = 0.005; 
+        const PADDING_MS = 800; // Rohkem puhvrit, et ei hakiks
         const AUTO_SAVE_INTERVAL = 600000;
         const MAX_BUFFER_LIMIT = 90 * 60 * 1000;
 
         let isSpeaking = false, silenceHoldFrames = 0;
         let db;
         const dbReq = indexedDB.open("Peegel_Database_Final", 1);
-        dbReq.onupgradeneeded = e => { const d = e.target.result; if (!d.objectStoreNames.contains('sessions')) { d.createObjectStore('sessions', { keyPath: 'id' }); } };
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
         function toggleBlackout() { const overlay = document.getElementById('blackout-overlay'); overlay.style.display = (overlay.style.display === 'block') ? 'none' : 'block'; }
@@ -72,15 +72,19 @@
             try {
                 if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
                 document.getElementById('no-sleep-video').play();
-                stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true } });
+                stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioCtx.createMediaStreamSource(stream);
-                const gain = audioCtx.createGain(); gain.gain.value = 1.0; // Standard gain
-                source.connect(gain); gain.connect(audioCtx.destination);
+                
+                // EEMALDATUD: connect destination-isse (et ei kuuleks ennast)
                 processor = audioCtx.createScriptProcessor(4096, 1, 1);
                 const analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
-                source.connect(analyser); analyser.connect(processor); processor.connect(audioCtx.destination);
+                
+                source.connect(analyser); 
+                analyser.connect(processor); 
+                processor.connect(audioCtx.destination); 
+
                 sessionStart = new Date(); speechMs = 0; silenceMs = 0; speechBuffer = []; hzMin = 9999; hzMax = 0;
                 isLive = true;
                 processor.onaudioprocess = (e) => {
@@ -93,7 +97,9 @@
                     let sum = 0; for(let i=0; i<input.length; i++) sum += input[i]*input[i];
                     const rms = Math.sqrt(sum/input.length);
                     const frameMs = (4096 / audioCtx.sampleRate) * 1000;
+                    
                     if (speechMs > MAX_BUFFER_LIMIT) speechBuffer.shift();
+
                     if (rms > THRESHOLD) {
                         isSpeaking = true; silenceHoldFrames = Math.round(PADDING_MS / frameMs); speechMs += frameMs;
                         document.getElementById('status-light').classList.add('light-on');
@@ -153,10 +159,10 @@
                     <div class="glass rounded-[30px] p-5 mb-4 text-xs relative text-left border border-white/5">
                         <div class="flex justify-between items-center mb-3">
                             <div class="flex items-center gap-2">
-                                <span class="text-green-400 font-light text-[13px]">${s.start} - ${s.end}</span>
-                                ${s.pinned ? '<span title="Fikseeritud">📌</span>' : ''}
+                                <span class="text-green-400 font-light text-[12px]">${s.start} - ${s.end}</span>
+                                ${s.pinned ? '<span style="font-size:12px;">📌</span>' : ''}
                             </div>
-                            <div class="flex items-center gap-3">
+                            <div class="flex items-center gap-2">
                                 <span class="text-[9px] uppercase font-bold"><span class="dark-orange">Hz:</span> <span class="text-amber-500">${s.stats.hMin}-${s.stats.hMax}</span></span>
                                 <button onclick="delS(${s.id})" class="text-[9px] text-red-500 font-bold px-2 py-1 bg-red-950/20 rounded-lg">KUSTUTA</button>
                             </div>
@@ -181,7 +187,7 @@
             tx.objectStore("sessions").get(id).onsuccess = (e) => {
                 const s = e.target.result;
                 const htmlContent = `<html><body style="background:#020617;color:#eee;font-family:sans-serif;padding:20px;">
-                    <h1 style="color:#3b82f6;">Peegel: ${s.date} ${s.pinned ? '(PINNED)' : ''}</h1>
+                    <h1 style="color:#3b82f6;">Peegel: ${s.date} ${s.pinned ? '(📌)' : ''}</h1>
                     <p><span style="color:#60a5fa">Kõne:</span> ${formatTime(s.stats.sMs)} | <span style="color:#60a5fa">Paus:</span> ${formatTime(s.stats.vMs)} | <span style="color:#ea580c">Hz:</span> ${s.stats.hMin}-${s.stats.hMax}</p>
                     <audio controls src="${s.audio}" style="width:100%;margin:20px 0;"></audio>
                     <div style="background:#1e293b;padding:15px;border-radius:10px;font-style:italic;">${s.note || "Märkmed puuduvad"}</div>
