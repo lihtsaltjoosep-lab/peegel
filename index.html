@@ -7,18 +7,28 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.json">
-    <title>Peegel v32.9.14</title>
+    <title>Peegel v32.9.15</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root { --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); }
-        html, body { 
+        
+        /* See osa sunnib brauserit arvama, et sisu on pikem, et peita naviriba */
+        html { background-color: #020617; overflow: hidden; height: 100%; }
+        body { 
             background-color: #020617; color: #e2e8f0; font-family: sans-serif; 
-            margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; position: fixed; 
+            margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; position: fixed;
         }
+        
         .main-scroll { 
             height: 100vh; overflow-y: auto; -webkit-overflow-scrolling: touch; 
             padding: 20px; padding-top: calc(20px + var(--sat)); padding-bottom: 120px;
         }
+
+        /* Naviriba vastu: peidame süsteemsed elemendid nii palju kui võimalik */
+        @media screen and (display-mode: standalone) {
+            .main-scroll { padding-top: var(--sat); }
+        }
+
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
         .hidden { display: none !important; }
         #blackout-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; }
@@ -31,18 +41,44 @@
         .dark-orange { color: #ea580c; }
     </style>
 </head>
-<body onload="window.scrollTo(0, 1);"> <video id="no-sleep-video" loop playsinline muted style="display:none;"><source src="https://raw.githubusercontent.com/anars/blank-audio/master/250-milliseconds-of-silence.mp3"></video>
+<body>
+
+    <video id="no-sleep-video" loop playsinline muted style="display:none;"><source src="https://raw.githubusercontent.com/anars/blank-audio/master/250-milliseconds-of-silence.mp3"></video>
 
     <div id="blackout-overlay"><div onclick="toggleBlackout()" class="unlock-btn"><svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
     
     <div class="main-scroll" id="scroll-node">
         <div class="w-full max-w-md mx-auto space-y-6 text-center">
             <div class="flex justify-between items-center p-2"><h1 class="text-3xl font-black italic uppercase text-blue-500">Peegel</h1><div id="clock" class="text-xl font-light text-amber-600">00:00:00</div></div>
-            <div id="setup-screen" class="pt-20 pb-8 flex flex-col items-center"><div onclick="startSession()" class="play-ring"><svg class="w-12 h-12 ml-2 mb-1 fill-[#f4ead5]" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg><div class="text-[#f4ead5] font-black text-sm uppercase tracking-widest mt-1">Alusta</div></div><p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v32.9.14 • NAV FIX</p></div>
             
-            <div id="active-session" class="hidden space-y-4 text-left"><div class="flex justify-end pr-2"><button onclick="toggleBlackout()" class="text-[10px] font-bold text-slate-500 uppercase bg-slate-800/30 px-3 py-1 rounded-full border border-white/5">Pimenda</button></div>
-                <div class="glass rounded-[35px] p-6 space-y-4 border-t border-blue-500/20 shadow-2xl"><div class="flex justify-between items-center border-b border-white/5 pb-3"><div class="flex items-center gap-4"><div id="status-light"></div><div class="font-mono text-xs font-bold uppercase"><div class="text-green-400">Kõne: <span id="speech-timer">00:00</span></div><div class="text-blue-400">Paus: <span id="silence-timer">00:00</span></div></div></div><div class="text-right"><div class="text-[10px] text-slate-500 font-bold uppercase">HZ</div><div class="font-mono text-xs font-bold text-amber-500"><span id="hz-min">-</span> / <span id="hz-max">-</span></div></div></div><textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 placeholder-slate-600 resize-none" placeholder="Kirjuta märkmed siia..."></textarea></div>
-                <div class="grid grid-cols-2 gap-3"><button onclick="fixNow()" class="bg-blue-600 text-white py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95 shadow-lg">Fikseeri</button><button onclick="stopSession()" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95">Lõpeta</button></div></div>
+            <div id="setup-screen" class="pt-20 pb-8 flex flex-col items-center">
+                <div onclick="startSession()" class="play-ring">
+                    <svg class="w-12 h-12 ml-2 mb-1 fill-[#f4ead5]" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg>
+                    <div class="text-[#f4ead5] font-black text-sm uppercase tracking-widest mt-1">Alusta</div>
+                </div>
+                <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v32.9.15 • Deep Nav Fix</p>
+            </div>
+            
+            <div id="active-session" class="hidden space-y-4 text-left">
+                <div class="flex justify-end pr-2"><button onclick="toggleBlackout()" class="text-[10px] font-bold text-slate-500 uppercase bg-slate-800/30 px-3 py-1 rounded-full border border-white/5">Pimenda</button></div>
+                <div class="glass rounded-[35px] p-6 space-y-4 border-t border-blue-500/20 shadow-2xl">
+                    <div class="flex justify-between items-center border-b border-white/5 pb-3">
+                        <div class="flex items-center gap-4">
+                            <div id="status-light"></div>
+                            <div class="font-mono text-xs font-bold uppercase">
+                                <div class="text-green-400">Kõne: <span id="speech-timer">00:00</span></div>
+                                <div class="text-blue-400">Paus: <span id="silence-timer">00:00</span></div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-[10px] text-slate-500 font-bold uppercase">HZ</div>
+                            <div class="font-mono text-xs font-bold text-amber-500"><span id="hz-min">-</span> / <span id="hz-max">-</span></div>
+                        </div>
+                    </div>
+                    <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 placeholder-slate-600 resize-none" placeholder="Kirjuta märkmed siia..."></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-3"><button onclick="fixNow()" class="bg-blue-600 text-white py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95 shadow-lg">Fikseeri</button><button onclick="stopSession()" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95">Lõpeta</button></div>
+            </div>
             <div id="history-container" class="space-y-4 pb-24 text-left w-full mt-6"></div>
         </div>
     </div>
@@ -62,19 +98,22 @@
         const dbReq = indexedDB.open("Peegel_Database_Final", 1);
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
-        // Sunnib riba peitma igal klikil
-        document.addEventListener('click', () => { window.scrollTo(0, 1); });
+        // See funktsioon sunnib brauseri ribad peitma igal võimalusel
+        function hideNav() {
+            window.scrollTo(0, 1);
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            }
+        }
+
+        document.addEventListener('touchstart', hideNav, {passive: true});
 
         function toggleBlackout() { const overlay = document.getElementById('blackout-overlay'); overlay.style.display = (overlay.style.display === 'block') ? 'none' : 'block'; }
         setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }, 1000);
 
         async function startSession() {
             try {
-                // Proovib uuesti täisekraani
-                if (document.documentElement.requestFullscreen) {
-                    document.documentElement.requestFullscreen().catch(() => {});
-                }
-
+                hideNav();
                 if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
                 document.getElementById('no-sleep-video').play();
                 stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
@@ -86,7 +125,6 @@
                 source.connect(analyser); 
                 analyser.connect(processor); 
                 processor.connect(audioCtx.destination); 
-
                 sessionStart = new Date(); speechMs = 0; silenceMs = 0; speechBuffer = []; hzMin = 9999; hzMax = 0;
                 isLive = true;
                 processor.onaudioprocess = (e) => {
