@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.json">
-    <title>Peegel v32.9.8</title>
+    <title>Peegel v32.9.9</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root { --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); }
@@ -54,7 +54,7 @@
                     <svg class="w-12 h-12 ml-2 mb-1 fill-[#f4ead5]" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg>
                     <div class="text-[#f4ead5] font-black text-sm uppercase tracking-widest mt-1">Alusta</div>
                 </div>
-                <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v32.9.8 • UI Fix</p>
+                <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v32.9.9 • Final Polish</p>
             </div>
 
             <div id="active-session" class="hidden space-y-4 text-left">
@@ -102,7 +102,6 @@
         let isSpeaking = false, silenceHoldFrames = 0;
 
         let db;
-        // KASUTAME ÜHTE JA KINDLAT ANDMEBAASI NIMI ET AJALUGU PÜSIKS
         const dbReq = indexedDB.open("Peegel_Database_Final", 1);
         dbReq.onupgradeneeded = e => { 
             const d = e.target.result;
@@ -144,9 +143,7 @@
                     let sum = 0; for(let i=0; i<input.length; i++) sum += input[i]*input[i];
                     const rms = Math.sqrt(sum/input.length);
                     const frameMs = (4096 / audioCtx.sampleRate) * 1000;
-                    
                     if (speechMs > MAX_BUFFER_LIMIT) speechBuffer.shift();
-
                     if (rms > THRESHOLD) {
                         isSpeaking = true; silenceHoldFrames = Math.round(PADDING_MS / frameMs); speechMs += frameMs;
                         document.getElementById('status-light').classList.add('light-on');
@@ -208,11 +205,14 @@
                             <span class="text-green-400 text-[14px]">${s.start} - ${s.end}</span>
                             <button onclick="delS(${s.id})" class="text-[9px] text-red-500 font-bold px-2 py-1 bg-red-950/20 rounded-lg">KUSTUTA</button>
                         </div>
-                        <div class="flex justify-between text-[10px] text-slate-400 uppercase font-bold mb-2">
-                            <span>Kõne: ${formatTime(s.stats.sMs)} | Paus: ${formatTime(s.stats.vMs)} | Hz: ${s.stats.hMin}-${s.stats.hMax}</span>
+                        <div class="flex justify-between text-[10px] uppercase font-bold mb-2">
+                            <span class="text-slate-400">Kõne: <span class="text-blue-400">${formatTime(s.stats.sMs)}</span> | Paus: <span class="text-blue-400">${formatTime(s.stats.vMs)}</span> | Hz: <span class="text-amber-500">${s.stats.hMin}-${s.stats.hMax}</span></span>
                         </div>
                         <audio src="${s.audio}" controls class="w-full h-8 mb-4"></audio>
-                        ${s.note ? `<div class="p-3 bg-black/40 rounded-xl text-slate-300 italic border-l-2 border-blue-500/50 text-[11px]">${s.note}</div>` : ''}
+                        <div class="flex justify-between items-center mt-1">
+                            ${s.note ? `<div class="p-3 bg-black/40 rounded-xl text-slate-300 italic border-l-2 border-blue-500/50 text-[11px] w-full mr-2">${s.note}</div>` : '<div></div>'}
+                            <button onclick="downloadHTML(${s.id})" class="text-amber-400 font-bold text-[10px] uppercase tracking-widest whitespace-nowrap">Salvesta fail</button>
+                        </div>
                     </div>`).join('');
             };
         }
@@ -220,6 +220,21 @@
         function stopSession() { fixNow(); isLive = false; clearInterval(autoSaveTimer); if(wakeLock) wakeLock.release(); setTimeout(() => location.reload(), 500); }
         function formatTime(ms) { const s = Math.floor(ms / 1000); return Math.floor(s/60) + "m " + (s%60) + "s"; }
         window.delS = id => { if(confirm("Kustuta?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id); tx.oncomplete = renderHistory; } };
+        
+        window.downloadHTML = id => {
+            const tx = db.transaction("sessions", "readonly");
+            tx.objectStore("sessions").get(id).onsuccess = (e) => {
+                const s = e.target.result;
+                const htmlContent = `<html><body style="background:#020617;color:#eee;font-family:sans-serif;padding:20px;">
+                    <h1 style="color:#3b82f6;">Peegel Sessioon: ${s.date}</h1>
+                    <p><b>Aeg:</b> ${s.start} - ${s.end}</p>
+                    <p><b>Kõne:</b> ${formatTime(s.stats.sMs)} | <b>Paus:</b> ${formatTime(s.stats.vMs)} | <b>Hz:</b> ${s.stats.hMin}-${s.stats.hMax}</p>
+                    <audio controls src="${s.audio}" style="width:100%;margin:20px 0;"></audio>
+                    <div style="background:#1e293b;padding:15px;border-radius:10px;font-style:italic;">${s.note || "Märkmed puuduvad"}</div>
+                </body></html>`;
+                const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([htmlContent], {type: 'text/html'})); a.download = `Peegel_${s.id}.html`; a.click();
+            };
+        }
     </script>
 </body>
 </html>
