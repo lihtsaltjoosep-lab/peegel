@@ -1,8 +1,9 @@
 {
   "name": "Peegel",
   "short_name": "Peegel",
-  "start_url": "index.html",
+  "start_url": "index.html?fullscreen=true",
   "display": "standalone",
+  "display_override": ["fullscreen", "standalone"],
   "background_color": "#020617",
   "theme_color": "#020617",
   "orientation": "portrait",
@@ -10,7 +11,8 @@
     {
       "src": "https://cdn-icons-png.flaticon.com/512/103/103120.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }
