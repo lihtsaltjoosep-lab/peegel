@@ -3,13 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.json">
-    
-    <title>Peegel v32.9.2</title>
+    <title>Peegel v32.9.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root { --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); }
@@ -19,30 +17,25 @@
         }
         .main-scroll { 
             height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; 
-            padding: 20px; padding-top: calc(10px + var(--sat)); padding-bottom: 100px; 
+            padding: 20px; padding-top: calc(15px + var(--sat)); padding-bottom: 120px; 
         }
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
         .hidden { display: none !important; }
-        
-        /* PIMENDUSE KIHT */
         #blackout-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; }
         .unlock-btn { position: absolute; bottom: 40px; left: 40px; width: 44px; height: 44px; border-radius: 50%; background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer; }
-        
-        /* PLAY NUPP */
         .play-ring { width: 150px; height: 150px; border-radius: 50%; background: #1d4ed8; border: 5px solid #f4ead5; box-shadow: 0 0 30px rgba(29, 78, 216, 0.4); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
         #status-light { width: 12px; height: 12px; border-radius: 50%; background: #334155; transition: 0.1s; }
         .light-on { background: #22c55e !important; box-shadow: 0 0 10px #22c55e; }
-        
-        /* SPETSIALISTIDE NUPUD */
         .spec-btn { padding: 8px 14px; border-radius: 20px; font-size: 10px; font-weight: bold; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.1); transition: 0.2s; }
         .spec-active { background: #1d4ed8; border-color: #60a5fa; color: white; }
-        
         audio { height: 35px; width: 100%; filter: invert(1); margin-top: 5px; opacity: 0.8; }
     </style>
 </head>
-<body>
+<body onclick="document.documentElement.requestFullscreen().catch(()=>{})">
 
-    <video id="no-sleep-video" loop playsinline muted style="display:none;"><source src="https://raw.githubusercontent.com/anars/blank-audio/master/250-milliseconds-of-silence.mp3"></video>
+    <video id="no-sleep-video" loop playsinline muted style="display:none;">
+        <source src="https://raw.githubusercontent.com/anars/blank-audio/master/250-milliseconds-of-silence.mp3">
+    </video>
 
     <div id="blackout-overlay">
         <div onclick="toggleBlackout()" class="unlock-btn">
@@ -70,7 +63,7 @@
                     <svg class="w-12 h-12 ml-2 fill-[#f4ead5]" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z"/></svg>
                     <div class="text-[#f4ead5] font-black text-xs uppercase tracking-widest mt-2">Alusta</div>
                 </div>
-                <p class="text-slate-600 text-[10px] uppercase tracking-[0.4em]">v32.9.2 • Ready for Mission</p>
+                <p class="text-slate-600 text-[10px] uppercase tracking-[0.4em]">v32.9.3 • Work-Ready</p>
             </div>
 
             <div id="active-session" class="hidden space-y-4">
@@ -84,7 +77,7 @@
                         <div class="flex items-center gap-4">
                             <div id="status-light"></div>
                             <div class="font-mono text-[11px] leading-tight">
-                                <div class="text-green-400 font-bold">KÕNE: <span id="speech-timer">0m 0s</span></div>
+                                <div class="text-green-400 font-bold text-[13px]">KÕNE: <span id="speech-timer">0m 0s</span></div>
                                 <div class="text-blue-400">PAUS: <span id="silence-timer">0m 0s</span></div>
                             </div>
                         </div>
@@ -111,17 +104,15 @@
         let audioCtx, processor, stream, speechBuffer = [], sessionStart = null;
         let speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0, autoSaveTimer;
 
-        // SEADED
-        const THRESHOLD = 0.001; // Ultra-kõrge tundlikkus
-        const PADDING_MS = 500; 
-        const AUTO_SAVE_INTERVAL = 600000; // 10 minutit
-        const MAX_BUFFER_LIMIT = 90 * 60 * 1000; // 1.5 tundi
+        const THRESHOLD = 0.001;
+        const PADDING_MS = 500;
+        const AUTO_SAVE_INTERVAL = 600000;
+        const MAX_BUFFER_LIMIT = 90 * 60 * 1000;
 
         let isSpeaking = false, silenceHoldFrames = 0;
 
-        // DB AVAMINE
         let db;
-        const dbReq = indexedDB.open("Peegel_Final_DB_v2", 1);
+        const dbReq = indexedDB.open("Peegel_Final_DB_v3", 1);
         dbReq.onupgradeneeded = e => { e.target.result.createObjectStore('sessions', { keyPath: 'id' }); };
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
@@ -137,7 +128,9 @@
             overlay.style.display = (overlay.style.display === 'block') ? 'none' : 'block';
         }
 
-        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }, 1000);
+        setInterval(() => { 
+            document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); 
+        }, 1000);
 
         async function startSession() {
             try {
@@ -173,7 +166,6 @@
                     const rms = Math.sqrt(sum/input.length);
                     const frameMs = (4096 / audioCtx.sampleRate) * 1000;
 
-                    // 1.5h puhvri kontroll
                     if (speechMs > MAX_BUFFER_LIMIT) speechBuffer.shift();
 
                     if (rms > THRESHOLD) {
@@ -193,7 +185,7 @@
                 document.getElementById('setup-screen').classList.add('hidden');
                 document.getElementById('active-session').classList.remove('hidden');
                 autoSaveTimer = setInterval(() => fixNow(false), AUTO_SAVE_INTERVAL);
-            } catch (err) { alert("Luba mikrofon!"); }
+            } catch (err) { alert("Viga!"); }
         }
 
         function fixNow(isManual = true) {
@@ -226,9 +218,8 @@
             reader.readAsDataURL(new Blob([wavBuffer], { type: 'audio/wav' }));
             reader.onloadend = () => {
                 const tx = db.transaction("sessions", "readwrite");
-                const store = tx.objectStore("sessions");
-                store.add({ id: Date.now(), spec, start: startT, end: endT, date: new Date().toLocaleDateString('et-EE'), note, audio: reader.result, stats: { sMs, vMs, hMin, hMax } });
-                tx.oncomplete = () => { renderHistory(); }; // Värskendab logi kohe
+                tx.objectStore("sessions").add({ id: Date.now(), spec, start: startT, end: endT, date: new Date().toLocaleDateString('et-EE'), note, audio: reader.result, stats: { sMs, vMs, hMin, hMax } });
+                tx.oncomplete = () => { renderHistory(); };
             };
         }
 
