@@ -2,24 +2,29 @@
 <html lang="et">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
     <link rel="manifest" href="manifest.json">
-    <title>Peegel v32.2</title>
+    <title>Peegel v32.4</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; height: 100vh; }
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
         .hidden { display: none !important; }
         
+        /* MUST EKRAAN */
         #blackout-overlay {
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
             background: #000; z-index: 9999; display: none;
-            flex-direction: column; align-items: center; justify-content: center;
         }
 
+        /* VÄIKE AVAMISNUPP ALL VASAKUL */
         .unlock-btn {
-            width: 80px; height: 80px; border-radius: 50%;
-            background: rgba(30, 41, 59, 0.5); border: 1px solid #1e293b;
+            position: absolute; bottom: 20px; left: 20px;
+            width: 40px; height: 40px; border-radius: 50%;
+            background: rgba(30, 41, 59, 0.3); border: 1px solid rgba(255,255,255,0.05);
             display: flex; align-items: center; justify-content: center;
             cursor: pointer;
         }
@@ -40,15 +45,14 @@
         audio { height: 35px; width: 100%; border-radius: 8px; filter: invert(1) brightness(0.8); margin-top: 5px; }
     </style>
 </head>
-<body class="p-4 min-h-screen flex flex-col items-center">
+<body class="p-4 flex flex-col items-center">
 
     <div id="blackout-overlay">
         <div onclick="toggleBlackout()" class="unlock-btn">
-            <svg class="w-8 h-8 text-slate-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
         </div>
-        <p class="text-[10px] text-slate-900 mt-4 uppercase tracking-widest font-bold">Ava ekraan</p>
     </div>
     
     <div class="w-full max-w-md space-y-4 text-center">
@@ -62,7 +66,7 @@
                 <svg class="play-icon-svg" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg>
                 <div class="play-text">Alusta</div>
             </div>
-            <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v32.2: HD SILENCE CUT</p>
+            <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v32.4: COMPACT UNLOCK</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4 text-left">
@@ -106,15 +110,14 @@
         let sessionStart = null, speechMs = 0, silenceMs = 0;
         let hzMin = 9999, hzMax = 0, autoSaveTimer;
 
-        // VAIKUSE EEMALDAMISE SEADED (HD Kvaliteet)
-        const THRESHOLD = 0.008; // Lävi
-        const PADDING_MS = 400;  // Mitu ms lisame kõne algusesse/lõppu (et sõnu ei lõikaks)
+        const THRESHOLD = 0.008;
+        const PADDING_MS = 400; 
         let isSpeaking = false;
-        let silenceHoldFrames = 0; // Hysteresis
+        let silenceHoldFrames = 0;
 
         function toggleBlackout() {
             const overlay = document.getElementById('blackout-overlay');
-            overlay.style.display = (overlay.style.display === 'flex') ? 'none' : 'flex';
+            overlay.style.display = (overlay.style.display === 'block') ? 'none' : 'block';
         }
 
         let db;
@@ -145,45 +148,30 @@
                     if (!isLive) return;
                     const input = e.inputBuffer.getChannelData(0);
                     analyser.getByteFrequencyData(dataArray);
-                    
-                    // Hz arvutus
                     let mv = -1, mi = -1;
                     for (let i = 0; i < dataArray.length; i++) { if (dataArray[i] > mv) { mv = dataArray[i]; mi = i; } }
                     const hz = Math.round(mi * (audioCtx.sampleRate/2) / dataArray.length);
-                    
-                    // Helitugevuse arvutus
                     let sum = 0;
                     for(let i=0; i<input.length; i++) sum += input[i]*input[i];
                     const rms = Math.sqrt(sum/input.length);
-
                     const frameMs = (4096 / audioCtx.sampleRate) * 1000;
 
                     if (rms > THRESHOLD) {
                         isSpeaking = true;
-                        silenceHoldFrames = Math.round(PADDING_MS / frameMs); // Hoia kanalit lahti
+                        silenceHoldFrames = Math.round(PADDING_MS / frameMs);
                         speechMs += frameMs;
                         document.getElementById('status-light').classList.add('light-on');
-                        
                         if(hz > 50) {
                             if(hz < hzMin) hzMin = hz; if(hz > hzMax) hzMax = hz;
                             document.getElementById('hz-min').innerText = hzMin;
                             document.getElementById('hz-max').innerText = hzMax;
                         }
                     } else {
-                        if (silenceHoldFrames > 0) {
-                            silenceHoldFrames--;
-                            speechMs += frameMs; // Loeme veel kõneks (padding)
-                        } else {
-                            isSpeaking = false;
-                            silenceMs += frameMs;
-                            document.getElementById('status-light').classList.remove('light-on');
-                        }
+                        if (silenceHoldFrames > 0) { silenceHoldFrames--; speechMs += frameMs; } 
+                        else { isSpeaking = false; silenceMs += frameMs; document.getElementById('status-light').classList.remove('light-on'); }
                     }
 
-                    // SALVESTA AINULT KUI RÄÄGITAKSE (või paddingu ajal)
-                    if (isSpeaking || silenceHoldFrames > 0) {
-                        speechBuffer.push(new Float32Array(input));
-                    }
+                    if (isSpeaking || silenceHoldFrames > 0) { speechBuffer.push(new Float32Array(input)); }
                     
                     document.getElementById('speech-timer').innerText = formatTime(speechMs);
                     document.getElementById('silence-timer').innerText = formatTime(silenceMs);
@@ -240,11 +228,7 @@
             };
         }
 
-        function stopSession() {
-            fixNow(true); isLive = false; clearInterval(autoSaveTimer);
-            if(wakeLock) wakeLock.release();
-            setTimeout(() => location.reload(), 1000);
-        }
+        function stopSession() { fixNow(true); isLive = false; clearInterval(autoSaveTimer); if(wakeLock) wakeLock.release(); setTimeout(() => location.reload(), 1000); }
 
         function renderHistory() {
             if(!db) return;
