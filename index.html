@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.json">
-    <title>Peegel v32.9.4</title>
+    <title>Peegel v32.9.6</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root { --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); }
@@ -15,21 +15,22 @@
             background-color: #020617; color: #e2e8f0; font-family: sans-serif; 
             margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; position: fixed; 
         }
+        /* Sunnib sisu brauseri ribadest mööda suruma */
         .main-scroll { 
-            height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; 
-            padding: 20px; padding-top: calc(15px + var(--sat)); padding-bottom: 120px; 
+            height: 100vh; overflow-y: auto; -webkit-overflow-scrolling: touch; 
+            padding: 20px; padding-top: calc(20px + var(--sat)); padding-bottom: 120px;
         }
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
         .hidden { display: none !important; }
         #blackout-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; }
         .unlock-btn { position: absolute; bottom: 40px; left: 40px; width: 44px; height: 44px; border-radius: 50%; background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer; }
-        .play-ring { width: 150px; height: 150px; border-radius: 50%; background: #1d4ed8; border: 5px solid #f4ead5; box-shadow: 0 0 30px rgba(29, 78, 216, 0.4); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
+        .play-ring { width: 150px; height: 150px; border-radius: 50%; background: #1d4ed8; border: 5px solid #f4ead5; box-shadow: 0 0 30px rgba(244, 234, 213, 0.3); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
         #status-light { width: 12px; height: 12px; border-radius: 50%; background: #334155; transition: 0.1s; }
         .light-on { background: #22c55e !important; box-shadow: 0 0 10px #22c55e; }
         audio { height: 35px; width: 100%; filter: invert(1); margin-top: 5px; opacity: 0.8; }
     </style>
 </head>
-<body onclick="document.documentElement.requestFullscreen().catch(()=>{})">
+<body onclick="window.scrollTo(0, 0);">
 
     <video id="no-sleep-video" loop playsinline muted style="display:none;">
         <source src="https://raw.githubusercontent.com/anars/blank-audio/master/250-milliseconds-of-silence.mp3">
@@ -41,51 +42,51 @@
         </div>
     </div>
     
-    <div class="main-scroll" id="scroll-area">
-        <div class="w-full max-w-md mx-auto space-y-6">
+    <div class="main-scroll">
+        <div class="w-full max-w-md mx-auto space-y-6 text-center">
             
-            <div class="flex justify-between items-center px-2">
-                <h1 class="text-4xl font-black italic uppercase text-blue-500 tracking-tighter">Peegel</h1>
-                <div id="clock" class="text-xl font-mono text-amber-600">00:00:00</div>
+            <div class="flex justify-between items-center p-2">
+                <h1 class="text-3xl font-black italic uppercase text-blue-500">Peegel</h1>
+                <div id="clock" class="text-xl font-light text-amber-600">00:00:00</div>
             </div>
 
             <div id="setup-screen" class="pt-20 pb-8 flex flex-col items-center">
                 <div onclick="startSession()" class="play-ring">
-                    <svg class="w-12 h-12 ml-2 fill-[#f4ead5]" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z"/></svg>
-                    <div class="text-[#f4ead5] font-black text-xs uppercase tracking-widest mt-2">Alusta</div>
+                    <svg class="w-12 h-12 ml-2 mb-1 fill-[#f4ead5]" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg>
+                    <div class="text-[#f4ead5] font-black text-sm uppercase tracking-widest mt-1">Alusta</div>
                 </div>
-                <p class="text-slate-600 text-[10px] uppercase tracking-[0.4em] mt-12">v32.9.4 • Clean Build</p>
+                <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v32.9.6 • Silence Cut Fix</p>
             </div>
 
-            <div id="active-session" class="hidden space-y-4">
+            <div id="active-session" class="hidden space-y-4 text-left">
                 <div class="flex justify-end pr-2">
-                    <button onclick="toggleBlackout()" class="text-[10px] font-bold text-slate-500 uppercase bg-slate-800/40 px-4 py-2 rounded-full border border-white/5 shadow-sm">Pimenda</button>
+                    <button onclick="toggleBlackout()" class="text-[10px] font-bold text-slate-500 uppercase bg-slate-800/30 px-3 py-1 rounded-full border border-white/5">Pimenda</button>
                 </div>
 
                 <div class="glass rounded-[35px] p-6 space-y-4 border-t border-blue-500/20 shadow-2xl">
-                    <div class="flex justify-between items-center border-b border-white/5 pb-4">
+                    <div class="flex justify-between items-center border-b border-white/5 pb-3">
                         <div class="flex items-center gap-4">
                             <div id="status-light"></div>
-                            <div class="font-mono text-[11px] leading-tight">
-                                <div class="text-green-400 font-bold text-[13px]">KÕNE: <span id="speech-timer">0m 0s</span></div>
-                                <div class="text-blue-400">PAUS: <span id="silence-timer">0m 0s</span></div>
+                            <div class="font-mono text-xs font-bold uppercase">
+                                <div class="text-green-400">Kõne: <span id="speech-timer">00:00</span></div>
+                                <div class="text-blue-400">Paus: <span id="silence-timer">00:00</span></div>
                             </div>
                         </div>
-                        <div class="text-right font-mono text-[11px]">
-                            <div class="text-slate-500 uppercase text-[8px] font-black">Sagedus (HZ)</div>
-                            <div class="text-amber-500 font-bold"><span id="hz-min">-</span> / <span id="hz-max">-</span></div>
+                        <div class="text-right">
+                            <div class="text-[10px] text-slate-500 font-bold uppercase">HZ</div>
+                            <div class="font-mono text-xs font-bold text-amber-500"><span id="hz-min">-</span> / <span id="hz-max">-</span></div>
                         </div>
                     </div>
-                    <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-32 text-slate-200 placeholder-slate-700 resize-none" placeholder="Märkmed siia..."></textarea>
+                    <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 placeholder-slate-600 resize-none" placeholder="Kirjuta märkmed siia..."></textarea>
                 </div>
 
-                <div class="grid grid-cols-2 gap-4 px-2">
-                    <button onclick="fixNow()" class="bg-blue-600 py-5 rounded-3xl font-black uppercase text-xs tracking-widest shadow-lg active:scale-95 text-white">Fikseeri</button>
-                    <button onclick="stopSession()" class="bg-red-900/40 text-red-500 py-5 rounded-3xl font-black uppercase text-xs tracking-widest active:scale-95">Lõpeta</button>
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="fixNow()" class="bg-blue-600 text-white py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95 shadow-lg">Fikseeri</button>
+                    <button onclick="stopSession()" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95">Lõpeta</button>
                 </div>
             </div>
 
-            <div id="history-container" class="space-y-4 pt-6"></div>
+            <div id="history-container" class="space-y-4 pb-24 text-left w-full mt-6"></div>
         </div>
     </div>
 
@@ -94,7 +95,8 @@
         let audioCtx, processor, stream, speechBuffer = [], sessionStart = null;
         let speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0, autoSaveTimer;
 
-        const THRESHOLD = 0.001; 
+        // PARANDATUD LÄVI (0.006 ignoreerib müra)
+        const THRESHOLD = 0.006; 
         const PADDING_MS = 500;
         const AUTO_SAVE_INTERVAL = 600000;
         const MAX_BUFFER_LIMIT = 90 * 60 * 1000;
@@ -102,8 +104,7 @@
         let isSpeaking = false, silenceHoldFrames = 0;
 
         let db;
-        const dbReq = indexedDB.open("Peegel_Final_DB_v4", 1);
-        dbReq.onupgradeneeded = e => { e.target.result.createObjectStore('sessions', { keyPath: 'id' }); };
+        const dbReq = indexedDB.open("Peegel_Final_DB_v5", 1);
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
         function toggleBlackout() {
@@ -111,44 +112,34 @@
             overlay.style.display = (overlay.style.display === 'block') ? 'none' : 'block';
         }
 
-        setInterval(() => { 
-            document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); 
-        }, 1000);
+        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }, 1000);
 
         async function startSession() {
             try {
                 if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
                 document.getElementById('no-sleep-video').play();
-                
                 stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true } });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioCtx.createMediaStreamSource(stream);
                 const gain = audioCtx.createGain(); gain.gain.value = 0.001;
                 source.connect(gain); gain.connect(audioCtx.destination);
-
                 processor = audioCtx.createScriptProcessor(4096, 1, 1);
-                const analyser = audioCtx.createAnalyser();
-                analyser.fftSize = 256;
+                const analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
                 source.connect(analyser); analyser.connect(processor); processor.connect(audioCtx.destination);
-                
                 sessionStart = new Date(); speechMs = 0; silenceMs = 0; speechBuffer = []; hzMin = 9999; hzMax = 0;
                 isLive = true;
-
                 processor.onaudioprocess = (e) => {
                     if (!isLive) return;
                     const input = e.inputBuffer.getChannelData(0);
                     analyser.getByteFrequencyData(dataArray);
-                    
                     let mv = -1, mi = -1;
                     for (let i = 0; i < dataArray.length; i++) { if (dataArray[i] > mv) { mv = dataArray[i]; mi = i; } }
                     const hz = Math.round(mi * (audioCtx.sampleRate/2) / dataArray.length);
-                    
                     let sum = 0; for(let i=0; i<input.length; i++) sum += input[i]*input[i];
                     const rms = Math.sqrt(sum/input.length);
                     const frameMs = (4096 / audioCtx.sampleRate) * 1000;
-
+                    
                     if (speechMs > MAX_BUFFER_LIMIT) speechBuffer.shift();
 
                     if (rms > THRESHOLD) {
@@ -160,11 +151,9 @@
                         else { isSpeaking = false; silenceMs += frameMs; document.getElementById('status-light').classList.remove('light-on'); }
                     }
                     if (isSpeaking || silenceHoldFrames > 0) speechBuffer.push(new Float32Array(input));
-                    
                     document.getElementById('speech-timer').innerText = formatTime(speechMs);
                     document.getElementById('silence-timer').innerText = formatTime(silenceMs);
                 };
-
                 document.getElementById('setup-screen').classList.add('hidden');
                 document.getElementById('active-session').classList.remove('hidden');
                 autoSaveTimer = setInterval(() => fixNow(false), AUTO_SAVE_INTERVAL);
@@ -176,10 +165,8 @@
             const noteText = document.getElementById('note-input').value;
             const startT = sessionStart.toLocaleTimeString('et-EE'), endT = new Date().toLocaleTimeString('et-EE');
             const buf = [...speechBuffer], sM = speechMs, vM = silenceMs, hMi = hzMin, hMa = hzMax;
-
             speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0; sessionStart = new Date();
             if(isManual) document.getElementById('note-input').value = "";
-            
             saveToDB(buf, startT, endT, noteText, sM, vM, hMi, hMa);
         }
 
@@ -196,13 +183,12 @@
             view.setUint32(40, length * 2, true);
             let offset = 44;
             for (let chunk of buffer) { for (let i = 0; i < chunk.length; i++) { const s = Math.max(-1, Math.min(1, chunk[i])); view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true); offset += 2; } }
-            
             const reader = new FileReader();
             reader.readAsDataURL(new Blob([wavBuffer], { type: 'audio/wav' }));
             reader.onloadend = () => {
                 const tx = db.transaction("sessions", "readwrite");
                 tx.objectStore("sessions").add({ id: Date.now(), start: startT, end: endT, date: new Date().toLocaleDateString('et-EE'), note, audio: reader.result, stats: { sMs, vMs, hMin, hMax } });
-                tx.oncomplete = () => { renderHistory(); };
+                tx.oncomplete = renderHistory;
             };
         }
 
@@ -212,14 +198,16 @@
             tx.objectStore("sessions").getAll().onsuccess = e => {
                 const list = e.target.result.sort((a,b) => b.id - a.id);
                 document.getElementById('history-container').innerHTML = list.map(s => `
-                    <div class="glass rounded-[30px] p-5 mb-4 text-xs relative text-left shadow-xl border border-white/5">
+                    <div class="glass rounded-[30px] p-5 mb-4 text-xs relative text-left border border-white/5">
                         <div class="flex justify-between font-bold mb-3 items-center">
-                            <span class="text-green-400 font-mono text-xl leading-none font-black">${s.start} - ${s.end}</span>
-                            <button onclick="delS(${s.id})" class="text-[9px] text-red-500 font-black px-2 py-1 bg-red-950/20 rounded-lg">KUSTUTA</button>
+                            <span class="text-green-400 text-[14px]">${s.start} - ${s.end}</span>
+                            <button onclick="delS(${s.id})" class="text-[9px] text-red-500 font-bold px-2 py-1 bg-red-950/20 rounded-lg">KUSTUTA</button>
                         </div>
-                        <div class="text-slate-500 text-[9px] mb-4 font-bold uppercase tracking-tight">${s.date} • KÕNE: ${formatTime(s.stats.sMs)} • PAUS: ${formatTime(s.stats.vMs)} • ${s.stats.hMin}-${s.stats.hMax}Hz</div>
+                        <div class="flex justify-between text-[10px] text-slate-400 uppercase font-bold mb-2">
+                            <span>Kõne: ${formatTime(s.stats.sMs)} | Paus: ${formatTime(s.stats.vMs)} | Hz: ${s.stats.hMin}-${s.stats.hMax}</span>
+                        </div>
                         <audio src="${s.audio}" controls class="w-full h-8 mb-4"></audio>
-                        ${s.note ? `<div class="p-4 bg-black/40 rounded-2xl text-slate-300 italic border-l-2 border-blue-500/50 mb-2 text-[11px] leading-relaxed">${s.note}</div>` : ''}
+                        ${s.note ? `<div class="p-3 bg-black/40 rounded-xl text-slate-300 italic border-l-2 border-blue-500/50 text-[11px]">${s.note}</div>` : ''}
                     </div>`).join('');
             };
         }
