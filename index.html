@@ -4,21 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="manifest" href="manifest.json">
-    <title>Peegel v32.1</title>
+    <title>Peegel v32.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
         .hidden { display: none !important; }
         
-        /* PIMEDA REŽIIMI KIHT */
         #blackout-overlay {
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
             background: #000; z-index: 9999; display: none;
             flex-direction: column; align-items: center; justify-content: center;
         }
 
-        /* VÄIKE AVAMISNUPP */
         .unlock-btn {
             width: 80px; height: 80px; border-radius: 50%;
             background: rgba(30, 41, 59, 0.5); border: 1px solid #1e293b;
@@ -50,7 +48,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
         </div>
-        <p class="text-[10px] text-slate-900 mt-4 uppercase tracking-widest font-bold">Puuduta avamiseks</p>
+        <p class="text-[10px] text-slate-900 mt-4 uppercase tracking-widest font-bold">Ava ekraan</p>
     </div>
     
     <div class="w-full max-w-md space-y-4 text-center">
@@ -64,7 +62,7 @@
                 <svg class="play-icon-svg" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg>
                 <div class="play-text">Alusta</div>
             </div>
-            <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v32.1: BLACKOUT MODE</p>
+            <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v32.2: HD SILENCE CUT</p>
         </div>
 
         <div id="active-session" class="hidden space-y-4 text-left">
@@ -108,32 +106,26 @@
         let sessionStart = null, speechMs = 0, silenceMs = 0;
         let hzMin = 9999, hzMax = 0, autoSaveTimer;
 
-        // PIMENDA FUNKTSIOON
+        // VAIKUSE EEMALDAMISE SEADED (HD Kvaliteet)
+        const THRESHOLD = 0.008; // Lävi
+        const PADDING_MS = 400;  // Mitu ms lisame kõne algusesse/lõppu (et sõnu ei lõikaks)
+        let isSpeaking = false;
+        let silenceHoldFrames = 0; // Hysteresis
+
         function toggleBlackout() {
             const overlay = document.getElementById('blackout-overlay');
-            if (overlay.style.display === 'flex') {
-                overlay.style.display = 'none';
-            } else {
-                overlay.style.display = 'flex';
-            }
+            overlay.style.display = (overlay.style.display === 'flex') ? 'none' : 'flex';
         }
 
-        // DATABASE
         let db;
         const dbReq = indexedDB.open("Peegel_v32_Data", 1);
-        dbReq.onupgradeneeded = e => {
-            const d = e.target.result;
-            if (!d.objectStoreNames.contains('sessions')) d.createObjectStore('sessions', { keyPath: 'id' });
-        };
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
         setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }, 1000);
 
         async function startSession() {
             try {
-                if ('wakeLock' in navigator) {
-                    try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
-                }
+                if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); }
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioCtx.createMediaStreamSource(stream);
@@ -153,26 +145,46 @@
                     if (!isLive) return;
                     const input = e.inputBuffer.getChannelData(0);
                     analyser.getByteFrequencyData(dataArray);
+                    
+                    // Hz arvutus
                     let mv = -1, mi = -1;
                     for (let i = 0; i < dataArray.length; i++) { if (dataArray[i] > mv) { mv = dataArray[i]; mi = i; } }
                     const hz = Math.round(mi * (audioCtx.sampleRate/2) / dataArray.length);
+                    
+                    // Helitugevuse arvutus
                     let sum = 0;
                     for(let i=0; i<input.length; i++) sum += input[i]*input[i];
                     const rms = Math.sqrt(sum/input.length);
 
-                    if (rms > 0.008) {
-                        speechMs += (4096 / audioCtx.sampleRate) * 1000;
+                    const frameMs = (4096 / audioCtx.sampleRate) * 1000;
+
+                    if (rms > THRESHOLD) {
+                        isSpeaking = true;
+                        silenceHoldFrames = Math.round(PADDING_MS / frameMs); // Hoia kanalit lahti
+                        speechMs += frameMs;
                         document.getElementById('status-light').classList.add('light-on');
+                        
                         if(hz > 50) {
                             if(hz < hzMin) hzMin = hz; if(hz > hzMax) hzMax = hz;
                             document.getElementById('hz-min').innerText = hzMin;
                             document.getElementById('hz-max').innerText = hzMax;
                         }
-                        speechBuffer.push(new Float32Array(input));
                     } else {
-                        silenceMs += (4096 / audioCtx.sampleRate) * 1000;
-                        document.getElementById('status-light').classList.remove('light-on');
+                        if (silenceHoldFrames > 0) {
+                            silenceHoldFrames--;
+                            speechMs += frameMs; // Loeme veel kõneks (padding)
+                        } else {
+                            isSpeaking = false;
+                            silenceMs += frameMs;
+                            document.getElementById('status-light').classList.remove('light-on');
+                        }
                     }
+
+                    // SALVESTA AINULT KUI RÄÄGITAKSE (või paddingu ajal)
+                    if (isSpeaking || silenceHoldFrames > 0) {
+                        speechBuffer.push(new Float32Array(input));
+                    }
+                    
                     document.getElementById('speech-timer').innerText = formatTime(speechMs);
                     document.getElementById('silence-timer').innerText = formatTime(silenceMs);
                 };
@@ -187,14 +199,13 @@
         function fixNow(isManual = true) {
             if (speechBuffer.length === 0) return;
             const noteText = document.getElementById('note-input').value;
-            const clipStart = sessionStart.toLocaleTimeString('et-EE'), clipEnd = new Date().toLocaleTimeString('et-EE');
-            const currentBuffer = [...speechBuffer], currentSpeechMs = speechMs, currentSilenceMs = silenceMs;
-            const cHzMin = hzMin, cHzMax = hzMax;
+            const startT = sessionStart.toLocaleTimeString('et-EE'), endT = new Date().toLocaleTimeString('et-EE');
+            const buf = [...speechBuffer], sM = speechMs, vM = silenceMs, hMi = hzMin, hMa = hzMax;
 
             speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0; sessionStart = new Date();
             if(isManual) document.getElementById('note-input').value = "";
             document.getElementById('hz-min').innerText = "-"; document.getElementById('hz-max').innerText = "-";
-            processAndSave(currentBuffer, clipStart, clipEnd, noteText, currentSpeechMs, currentSilenceMs, cHzMin, cHzMax);
+            processAndSave(buf, startT, endT, noteText, sM, vM, hMi, hMa);
         }
 
         async function processAndSave(buffer, startT, endT, note, sMs, vMs, hMin, hMax) {
