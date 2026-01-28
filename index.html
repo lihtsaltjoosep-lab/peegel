@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.json">
-    <title>Peegel v32.9.6</title>
+    <title>Peegel v32.9.8</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root { --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); }
@@ -15,7 +15,6 @@
             background-color: #020617; color: #e2e8f0; font-family: sans-serif; 
             margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; position: fixed; 
         }
-        /* Sunnib sisu brauseri ribadest mööda suruma */
         .main-scroll { 
             height: 100vh; overflow-y: auto; -webkit-overflow-scrolling: touch; 
             padding: 20px; padding-top: calc(20px + var(--sat)); padding-bottom: 120px;
@@ -55,7 +54,7 @@
                     <svg class="w-12 h-12 ml-2 mb-1 fill-[#f4ead5]" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg>
                     <div class="text-[#f4ead5] font-black text-sm uppercase tracking-widest mt-1">Alusta</div>
                 </div>
-                <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v32.9.6 • Silence Cut Fix</p>
+                <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v32.9.8 • UI Fix</p>
             </div>
 
             <div id="active-session" class="hidden space-y-4 text-left">
@@ -95,7 +94,6 @@
         let audioCtx, processor, stream, speechBuffer = [], sessionStart = null;
         let speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0, autoSaveTimer;
 
-        // PARANDATUD LÄVI (0.006 ignoreerib müra)
         const THRESHOLD = 0.006; 
         const PADDING_MS = 500;
         const AUTO_SAVE_INTERVAL = 600000;
@@ -104,7 +102,14 @@
         let isSpeaking = false, silenceHoldFrames = 0;
 
         let db;
-        const dbReq = indexedDB.open("Peegel_Final_DB_v5", 1);
+        // KASUTAME ÜHTE JA KINDLAT ANDMEBAASI NIMI ET AJALUGU PÜSIKS
+        const dbReq = indexedDB.open("Peegel_Database_Final", 1);
+        dbReq.onupgradeneeded = e => { 
+            const d = e.target.result;
+            if (!d.objectStoreNames.contains('sessions')) {
+                d.createObjectStore('sessions', { keyPath: 'id' }); 
+            }
+        };
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
         function toggleBlackout() {
