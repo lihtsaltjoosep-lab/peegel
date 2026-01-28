@@ -1,16 +1,17 @@
 {
+  "name": "Peegel v32.9",
   "short_name": "Peegel",
-  "name": "Peegel Pro Data Capsule",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "orientation": "portrait",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/584/584695.png",
+      "src": "https://cdn-icons-png.flaticon.com/512/103/103120.png",
+      "sizes": "512x512",
       "type": "image/png",
-      "sizes": "512x512"
+      "purpose": "any maskable"
     }
-  ],
-  "start_url": "./index.html",
-  "background_color": "#020617",
-  "display": "standalone",
-  "scope": "./",
-  "theme_color": "#1d4ed8"
+  ]
 }
