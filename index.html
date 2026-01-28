@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.json">
-    <title>Peegel v32.9.19</title>
+    <title>Peegel v32.9.22</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root { --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); }
@@ -30,11 +30,17 @@
 </head>
 <body onclick="window.scrollTo(0, 1);">
     <video id="no-sleep-video" loop playsinline muted style="display:none;"><source src="https://raw.githubusercontent.com/anars/blank-audio/master/250-milliseconds-of-silence.mp3"></video>
-    <div id="blackout-overlay"><div onclick="toggleBlackout()" class="unlock-btn"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
+    
+    <div id="blackout-overlay">
+        <div onclick="requestUnlock()" class="unlock-btn">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+    </div>
+
     <div class="main-scroll">
         <div class="w-full max-w-md mx-auto space-y-6 text-center">
             <div class="flex justify-between items-center p-2"><h1 class="text-3xl font-black italic uppercase text-blue-500">Peegel</h1><div id="clock" class="text-xl font-light text-amber-600">00:00:00</div></div>
-            <div id="setup-screen" class="pt-20 pb-8 flex flex-col items-center"><div onclick="startSession()" class="play-ring"><svg class="w-12 h-12 ml-2 mb-1 fill-[#f4ead5]" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg><div class="text-[#f4ead5] font-black text-sm uppercase tracking-widest mt-1">Alusta</div></div><p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v32.9.19 • Speech Loop</p></div>
+            <div id="setup-screen" class="pt-20 pb-8 flex flex-col items-center"><div onclick="startSession()" class="play-ring"><svg class="w-12 h-12 ml-2 mb-1 fill-[#f4ead5]" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg><div class="text-[#f4ead5] font-black text-sm uppercase tracking-widest mt-1">Alusta</div></div><p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v32.9.22 • Logic Final</p></div>
             <div id="active-session" class="hidden space-y-4 text-left">
                 <div class="flex justify-end pr-2"><button onclick="toggleBlackout()" class="text-[10px] font-bold text-slate-500 uppercase bg-slate-800/30 px-3 py-1 rounded-full border border-white/5">Pimenda</button></div>
                 <div class="glass rounded-[35px] p-6 space-y-4 border-t border-blue-500/20 shadow-2xl">
@@ -49,25 +55,41 @@
             <div id="history-container" class="space-y-4 pb-24 text-left w-full mt-6"></div>
         </div>
     </div>
+
     <script>
         let isLive = false, wakeLock = null, audioCtx, processor, stream, speechBuffer = [], sessionStart = null, speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0;
-        let lastAutoSaveSpeechMs = 0; // Jälgib, millal viimati automaatselt salvestati
-        const THRESHOLD = 0.005, PADDING_MS = 800, MAX_BUFFER_LIMIT = 90 * 60 * 1000;
-        const SPEECH_AUTO_SAVE_THRESHOLD = 600000; // 10 minutit puhast kõnet (600 000 ms)
-
+        let lastAutoSaveSpeechMs = 0;
+        const THRESHOLD = 0.005, PADDING_MS = 800, SPEECH_AUTO_SAVE_THRESHOLD = 600000;
         let isSpeaking = false, silenceHoldFrames = 0, db;
+        
+        // ÜHEKOHALINE TURVAKOOD
+        const APP_PIN = "5";
+
         const dbReq = indexedDB.open("Peegel_Database_Final", 1);
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
         function hideNav() { window.scrollTo(0, 1); if (document.documentElement.requestFullscreen) { document.documentElement.requestFullscreen().catch(() => {}); } }
         document.addEventListener('touchstart', hideNav, {passive: true});
-        function toggleBlackout() { const overlay = document.getElementById('blackout-overlay'); overlay.style.display = (overlay.style.display === 'block') ? 'none' : 'block'; }
+        
+        function toggleBlackout() { 
+            document.getElementById('blackout-overlay').style.display = 'block'; 
+        }
+
+        function requestUnlock() {
+            const enteredPin = prompt("Sisesta kood:");
+            if (enteredPin === APP_PIN) {
+                document.getElementById('blackout-overlay').style.display = 'none';
+            } else if (enteredPin !== null) {
+                alert("Vale!");
+            }
+        }
+
         setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }, 1000);
 
         async function startSession() {
             try {
                 hideNav();
-                if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+                if ('wakeLock' in navigator) { try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {} }
                 document.getElementById('no-sleep-video').play();
                 stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -88,7 +110,6 @@
                     let sum = 0; for(let i=0; i<input.length; i++) sum += input[i]*input[i];
                     const rms = Math.sqrt(sum/input.length);
                     const frameMs = (4096 / audioCtx.sampleRate) * 1000;
-
                     if (rms > THRESHOLD) {
                         isSpeaking = true; silenceHoldFrames = Math.round(PADDING_MS / frameMs); speechMs += frameMs;
                         document.getElementById('status-light').classList.add('light-on');
@@ -98,14 +119,11 @@
                         else { isSpeaking = false; silenceMs += frameMs; document.getElementById('status-light').classList.remove('light-on'); }
                     }
                     if (isSpeaking || silenceHoldFrames > 0) speechBuffer.push(new Float32Array(input));
-                    
                     document.getElementById('speech-timer').innerText = formatTime(speechMs);
                     document.getElementById('silence-timer').innerText = formatTime(silenceMs);
-
-                    // KONTROLL: Kas 10 min puhast kõnet on täis saanud pärast viimast salvestust?
                     if (speechMs - lastAutoSaveSpeechMs >= SPEECH_AUTO_SAVE_THRESHOLD) {
                         lastAutoSaveSpeechMs = speechMs;
-                        fixNow(false); // Salvesta automaatselt, aga ära nulli
+                        fixNow(false);
                     }
                 };
                 document.getElementById('setup-screen').classList.add('hidden');
@@ -118,7 +136,6 @@
             const noteText = document.getElementById('note-input').value;
             const startT = sessionStart.toLocaleTimeString('et-EE'), endT = new Date().toLocaleTimeString('et-EE');
             const buf = [...speechBuffer], sM = speechMs, vM = silenceMs, hMi = hzMin, hMa = hzMax;
-            
             if (isManual) {
                 speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0; sessionStart = new Date(); lastAutoSaveSpeechMs = 0;
                 document.getElementById('note-input').value = "";
@@ -166,7 +183,7 @@
             };
         }
 
-        function stopSession() { fixNow(true); isLive = false; if(wakeLock) wakeLock.release(); setTimeout(() => location.reload(), 500); }
+        function stopSession() { fixNow(true); isLive = false; if(wakeLock) { wakeLock.release(); wakeLock = null; } setTimeout(() => location.reload(), 500); }
         function formatTime(ms) { const s = Math.floor(ms / 1000); return Math.floor(s/60) + "m " + (s%60) + "s"; }
         window.delS = id => { if(confirm("Kustuta?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id); tx.oncomplete = renderHistory; } };
         window.downloadHTML = id => {
