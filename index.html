@@ -7,38 +7,19 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.json">
-    <title>Peegel v32.9.16</title>
+    <title>Peegel v32.9.19</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root { --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); }
-        
         html { background-color: #020617; overflow: hidden; height: 100%; }
-        body { 
-            background-color: #020617; color: #e2e8f0; font-family: sans-serif; 
-            margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; position: fixed;
-        }
-        
-        .main-scroll { 
-            height: 100vh; overflow-y: auto; -webkit-overflow-scrolling: touch; 
-            padding: 20px; padding-top: calc(20px + var(--sat)); padding-bottom: 120px;
-        }
-
-        @media screen and (display-mode: standalone) {
-            .main-scroll { padding-top: var(--sat); }
-        }
-
+        body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; position: fixed; }
+        .main-scroll { height: 100vh; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px; padding-top: calc(20px + var(--sat)); padding-bottom: 120px; }
+        @media screen and (display-mode: standalone) { .main-scroll { padding-top: var(--sat); } }
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
         .hidden { display: none !important; }
-        
-        /* PIMENDATUD EKRAAN JA PEIDETUD LUKK */
         #blackout-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; }
-        .unlock-btn { 
-            position: absolute; bottom: 40px; left: 40px; width: 60px; height: 60px; 
-            border-radius: 50%; background: transparent; display: flex; align-items: center; 
-            justify-content: center; cursor: pointer; 
-        }
-        .unlock-btn svg { color: rgba(255, 255, 255, 0.01); } /* Peaaegu nähtamatu */
-
+        .unlock-btn { position: absolute; bottom: 40px; left: 40px; width: 60px; height: 60px; border-radius: 50%; background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .unlock-btn svg { color: rgba(255, 255, 255, 0.01); }
         .play-ring { width: 150px; height: 150px; border-radius: 50%; background: #1d4ed8; border: 5px solid #f4ead5; box-shadow: 0 0 30px rgba(244, 234, 213, 0.3); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
         #status-light { width: 12px; height: 12px; border-radius: 50%; background: #334155; transition: 0.1s; }
         .light-on { background: #22c55e !important; box-shadow: 0 0 10px #22c55e; }
@@ -47,81 +28,40 @@
         .dark-orange { color: #ea580c; }
     </style>
 </head>
-<body>
-
+<body onclick="window.scrollTo(0, 1);">
     <video id="no-sleep-video" loop playsinline muted style="display:none;"><source src="https://raw.githubusercontent.com/anars/blank-audio/master/250-milliseconds-of-silence.mp3"></video>
-
-    <div id="blackout-overlay">
-        <div onclick="toggleBlackout()" class="unlock-btn">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-    </div>
-    
-    <div class="main-scroll" id="scroll-node">
+    <div id="blackout-overlay"><div onclick="toggleBlackout()" class="unlock-btn"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
+    <div class="main-scroll">
         <div class="w-full max-w-md mx-auto space-y-6 text-center">
             <div class="flex justify-between items-center p-2"><h1 class="text-3xl font-black italic uppercase text-blue-500">Peegel</h1><div id="clock" class="text-xl font-light text-amber-600">00:00:00</div></div>
-            
-            <div id="setup-screen" class="pt-20 pb-8 flex flex-col items-center">
-                <div onclick="startSession()" class="play-ring">
-                    <svg class="w-12 h-12 ml-2 mb-1 fill-[#f4ead5]" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg>
-                    <div class="text-[#f4ead5] font-black text-sm uppercase tracking-widest mt-1">Alusta</div>
-                </div>
-                <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v32.9.16 • Blackout Pro</p>
-            </div>
-            
+            <div id="setup-screen" class="pt-20 pb-8 flex flex-col items-center"><div onclick="startSession()" class="play-ring"><svg class="w-12 h-12 ml-2 mb-1 fill-[#f4ead5]" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg><div class="text-[#f4ead5] font-black text-sm uppercase tracking-widest mt-1">Alusta</div></div><p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v32.9.19 • Speech Loop</p></div>
             <div id="active-session" class="hidden space-y-4 text-left">
                 <div class="flex justify-end pr-2"><button onclick="toggleBlackout()" class="text-[10px] font-bold text-slate-500 uppercase bg-slate-800/30 px-3 py-1 rounded-full border border-white/5">Pimenda</button></div>
                 <div class="glass rounded-[35px] p-6 space-y-4 border-t border-blue-500/20 shadow-2xl">
                     <div class="flex justify-between items-center border-b border-white/5 pb-3">
-                        <div class="flex items-center gap-4">
-                            <div id="status-light"></div>
-                            <div class="font-mono text-xs font-bold uppercase">
-                                <div class="text-green-400">Kõne: <span id="speech-timer">00:00</span></div>
-                                <div class="text-blue-400">Paus: <span id="silence-timer">00:00</span></div>
-                            </div>
-                        </div>
-                        <div class="text-right">
-                            <div class="text-[10px] text-slate-500 font-bold uppercase">HZ</div>
-                            <div class="font-mono text-xs font-bold text-amber-500"><span id="hz-min">-</span> / <span id="hz-max">-</span></div>
-                        </div>
+                        <div class="flex items-center gap-4"><div id="status-light"></div><div class="font-mono text-xs font-bold uppercase"><div class="text-green-400">Kõne: <span id="speech-timer">00:00</span></div><div class="text-blue-400">Paus: <span id="silence-timer">00:00</span></div></div></div>
+                        <div class="text-right"><div class="text-[10px] text-slate-500 font-bold uppercase">HZ</div><div class="font-mono text-xs font-bold text-amber-500"><span id="hz-min">-</span> / <span id="hz-max">-</span></div></div>
                     </div>
                     <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 placeholder-slate-600 resize-none" placeholder="Kirjuta märkmed siia..."></textarea>
                 </div>
-                <div class="grid grid-cols-2 gap-3"><button onclick="fixNow()" class="bg-blue-600 text-white py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95 shadow-lg">Fikseeri</button><button onclick="stopSession()" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95">Lõpeta</button></div>
+                <div class="grid grid-cols-2 gap-3"><button onclick="fixNow(true)" class="bg-blue-600 text-white py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95 shadow-lg">Fikseeri</button><button onclick="stopSession()" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95">Lõpeta</button></div>
             </div>
             <div id="history-container" class="space-y-4 pb-24 text-left w-full mt-6"></div>
         </div>
     </div>
-
     <script>
-        let isLive = false, wakeLock = null;
-        let audioCtx, processor, stream, speechBuffer = [], sessionStart = null;
-        let speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0, autoSaveTimer;
+        let isLive = false, wakeLock = null, audioCtx, processor, stream, speechBuffer = [], sessionStart = null, speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0;
+        let lastAutoSaveSpeechMs = 0; // Jälgib, millal viimati automaatselt salvestati
+        const THRESHOLD = 0.005, PADDING_MS = 800, MAX_BUFFER_LIMIT = 90 * 60 * 1000;
+        const SPEECH_AUTO_SAVE_THRESHOLD = 600000; // 10 minutit puhast kõnet (600 000 ms)
 
-        const THRESHOLD = 0.005; 
-        const PADDING_MS = 800; 
-        const AUTO_SAVE_INTERVAL = 600000;
-        const MAX_BUFFER_LIMIT = 90 * 60 * 1000;
-
-        let isSpeaking = false, silenceHoldFrames = 0;
-        let db;
+        let isSpeaking = false, silenceHoldFrames = 0, db;
         const dbReq = indexedDB.open("Peegel_Database_Final", 1);
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
-        function hideNav() {
-            window.scrollTo(0, 1);
-            if (document.documentElement.requestFullscreen) {
-                document.documentElement.requestFullscreen().catch(() => {});
-            }
-        }
-
+        function hideNav() { window.scrollTo(0, 1); if (document.documentElement.requestFullscreen) { document.documentElement.requestFullscreen().catch(() => {}); } }
         document.addEventListener('touchstart', hideNav, {passive: true});
-
-        function toggleBlackout() { 
-            const overlay = document.getElementById('blackout-overlay'); 
-            overlay.style.display = (overlay.style.display === 'block') ? 'none' : 'block'; 
-        }
-
+        function toggleBlackout() { const overlay = document.getElementById('blackout-overlay'); overlay.style.display = (overlay.style.display === 'block') ? 'none' : 'block'; }
         setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }, 1000);
 
         async function startSession() {
@@ -135,8 +75,8 @@
                 processor = audioCtx.createScriptProcessor(4096, 1, 1);
                 const analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
-                source.connect(analyser); analyser.connect(processor); processor.connect(audioCtx.destination); 
-                sessionStart = new Date(); speechMs = 0; silenceMs = 0; speechBuffer = []; hzMin = 9999; hzMax = 0;
+                source.connect(analyser); analyser.connect(processor); processor.connect(audioCtx.destination);
+                sessionStart = new Date(); speechMs = 0; silenceMs = 0; speechBuffer = []; hzMin = 9999; hzMax = 0; lastAutoSaveSpeechMs = 0;
                 isLive = true;
                 processor.onaudioprocess = (e) => {
                     if (!isLive) return;
@@ -148,6 +88,7 @@
                     let sum = 0; for(let i=0; i<input.length; i++) sum += input[i]*input[i];
                     const rms = Math.sqrt(sum/input.length);
                     const frameMs = (4096 / audioCtx.sampleRate) * 1000;
+
                     if (rms > THRESHOLD) {
                         isSpeaking = true; silenceHoldFrames = Math.round(PADDING_MS / frameMs); speechMs += frameMs;
                         document.getElementById('status-light').classList.add('light-on');
@@ -157,12 +98,18 @@
                         else { isSpeaking = false; silenceMs += frameMs; document.getElementById('status-light').classList.remove('light-on'); }
                     }
                     if (isSpeaking || silenceHoldFrames > 0) speechBuffer.push(new Float32Array(input));
+                    
                     document.getElementById('speech-timer').innerText = formatTime(speechMs);
                     document.getElementById('silence-timer').innerText = formatTime(silenceMs);
+
+                    // KONTROLL: Kas 10 min puhast kõnet on täis saanud pärast viimast salvestust?
+                    if (speechMs - lastAutoSaveSpeechMs >= SPEECH_AUTO_SAVE_THRESHOLD) {
+                        lastAutoSaveSpeechMs = speechMs;
+                        fixNow(false); // Salvesta automaatselt, aga ära nulli
+                    }
                 };
                 document.getElementById('setup-screen').classList.add('hidden');
                 document.getElementById('active-session').classList.remove('hidden');
-                autoSaveTimer = setInterval(() => fixNow(false), AUTO_SAVE_INTERVAL);
             } catch (err) { alert("Viga!"); }
         }
 
@@ -171,8 +118,11 @@
             const noteText = document.getElementById('note-input').value;
             const startT = sessionStart.toLocaleTimeString('et-EE'), endT = new Date().toLocaleTimeString('et-EE');
             const buf = [...speechBuffer], sM = speechMs, vM = silenceMs, hMi = hzMin, hMa = hzMax;
-            speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0; sessionStart = new Date();
-            if(isManual) document.getElementById('note-input').value = "";
+            
+            if (isManual) {
+                speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0; sessionStart = new Date(); lastAutoSaveSpeechMs = 0;
+                document.getElementById('note-input').value = "";
+            }
             saveToDB(buf, startT, endT, noteText, sM, vM, hMi, hMa, isManual);
         }
 
@@ -206,40 +156,24 @@
                 document.getElementById('history-container').innerHTML = list.map(s => `
                     <div class="glass rounded-[30px] p-5 mb-4 text-xs relative text-left border border-white/5">
                         <div class="flex justify-between items-center mb-3">
-                            <div class="flex items-center gap-2">
-                                <span class="text-green-400 font-light text-[12px]">${s.start} - ${s.end}</span>
-                                ${s.pinned ? '<span style="font-size:12px;">📌</span>' : ''}
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <span class="text-[9px] uppercase font-bold"><span class="dark-orange">Hz:</span> <span class="text-amber-500">${s.stats.hMin}-${s.stats.hMax}</span></span>
-                                <button onclick="delS(${s.id})" class="text-[9px] text-red-500 font-bold px-2 py-1 bg-red-950/20 rounded-lg">KUSTUTA</button>
-                            </div>
+                            <div class="flex items-center gap-2"><span class="text-green-400 font-light text-[12px]">${s.start} - ${s.end}</span>${s.pinned ? '<span style="font-size:12px;">📌</span>' : ''}</div>
+                            <div class="flex items-center gap-2"><span class="text-[9px] uppercase font-bold"><span class="dark-orange">Hz:</span> <span class="text-amber-500">${s.stats.hMin}-${s.stats.hMax}</span></span><button onclick="delS(${s.id})" class="text-[9px] text-red-500 font-bold px-2 py-1 bg-red-950/20 rounded-lg">KUSTUTA</button></div>
                         </div>
-                        <div class="flex justify-between text-[10px] uppercase font-bold mb-2">
-                            <span><span class="steel-blue">Kõne:</span> <span class="text-blue-400">${formatTime(s.stats.sMs)}</span> | <span class="steel-blue">Paus:</span> <span class="text-blue-400">${formatTime(s.stats.vMs)}</span></span>
-                        </div>
+                        <div class="flex justify-between text-[10px] uppercase font-bold mb-2"><span><span class="steel-blue">Kõne:</span> <span class="text-blue-400">${formatTime(s.stats.sMs)}</span> | <span class="steel-blue">Paus:</span> <span class="text-blue-400">${formatTime(s.stats.vMs)}</span></span></div>
                         <audio src="${s.audio}" controls class="w-full h-8 mb-4"></audio>
-                        <div class="flex justify-between items-center mt-1">
-                            ${s.note ? `<div class="p-3 bg-black/40 rounded-xl text-slate-300 italic border-l-2 border-blue-500/50 text-[11px] w-full mr-2">${s.note}</div>` : '<div></div>'}
-                            <button onclick="downloadHTML(${s.id})" class="text-amber-400 font-bold text-[10px] uppercase tracking-widest whitespace-nowrap">HTML</button>
-                        </div>
+                        <div class="flex justify-between items-center mt-1">${s.note ? `<div class="p-3 bg-black/40 rounded-xl text-slate-300 italic border-l-2 border-blue-500/50 text-[11px] w-full mr-2">${s.note}</div>` : '<div></div>'}<button onclick="downloadHTML(${s.id})" class="text-amber-400 font-bold text-[10px] uppercase tracking-widest whitespace-nowrap">HTML</button></div>
                     </div>`).join('');
             };
         }
 
-        function stopSession() { fixNow(); isLive = false; clearInterval(autoSaveTimer); if(wakeLock) wakeLock.release(); setTimeout(() => location.reload(), 500); }
+        function stopSession() { fixNow(true); isLive = false; if(wakeLock) wakeLock.release(); setTimeout(() => location.reload(), 500); }
         function formatTime(ms) { const s = Math.floor(ms / 1000); return Math.floor(s/60) + "m " + (s%60) + "s"; }
         window.delS = id => { if(confirm("Kustuta?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id); tx.oncomplete = renderHistory; } };
         window.downloadHTML = id => {
             const tx = db.transaction("sessions", "readonly");
             tx.objectStore("sessions").get(id).onsuccess = (e) => {
                 const s = e.target.result;
-                const htmlContent = `<html><body style="background:#020617;color:#eee;font-family:sans-serif;padding:20px;">
-                    <h1 style="color:#3b82f6;">Peegel: ${s.date} ${s.pinned ? '(📌)' : ''}</h1>
-                    <p><span style="color:#60a5fa">Kõne:</span> ${formatTime(s.stats.sMs)} | <span style="color:#60a5fa">Paus:</span> ${formatTime(s.stats.vMs)} | <span style="color:#ea580c">Hz:</span> ${s.stats.hMin}-${s.stats.hMax}</p>
-                    <audio controls src="${s.audio}" style="width:100%;margin:20px 0;"></audio>
-                    <div style="background:#1e293b;padding:15px;border-radius:10px;font-style:italic;">${s.note || "Märkmed puuduvad"}</div>
-                </body></html>`;
+                const htmlContent = `<html><body style="background:#020617;color:#eee;font-family:sans-serif;padding:20px;"><h1 style="color:#3b82f6;">Peegel: ${s.date} ${s.pinned ? '(📌)' : ''}</h1><p><span style="color:#60a5fa">Kõne:</span> ${formatTime(s.stats.sMs)} | <span style="color:#60a5fa">Paus:</span> ${formatTime(s.stats.vMs)} | <span style="color:#ea580c">Hz:</span> ${s.stats.hMin}-${s.stats.hMax}</p><audio controls src="${s.audio}" style="width:100%;margin:20px 0;"></audio><div style="background:#1e293b;padding:15px;border-radius:10px;font-style:italic;">${s.note || "Märkmed puuduvad"}</div></body></html>`;
                 const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([htmlContent], {type: 'text/html'})); a.download = `Peegel_${s.id}.html`; a.click();
             };
         }
