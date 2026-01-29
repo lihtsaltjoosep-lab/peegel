@@ -9,46 +9,37 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#020617">
     
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="manifest.json?v=34.7">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2645/2645897.png">
 
-    <title>Peegel v34.6</title>
+    <title>Peegel v34.7</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;900&display=swap');
-        
         :root { --bg: #020617; --glass: rgba(15, 23, 42, 0.6); --accent: #1d4ed8; --text-main: #f4ead5; }
         body { background-color: var(--bg); color: #e2e8f0; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; min-height: 100vh; overflow-y: auto; margin: 0; padding: 0; }
-        
         .glass-card { background: var(--glass); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5); }
         .hidden { display: none !important; }
-        
         #blackout-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; }
         .unlock-trigger { position: absolute; bottom: 0; left: 0; width: 120px; height: 120px; z-index: 10000; cursor: pointer; }
-        
         .play-ring { width: 140px; height: 140px; border-radius: 50%; background: var(--accent); border: 2px solid var(--text-main); box-shadow: 0 0 40px rgba(29, 78, 216, 0.4); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .play-ring:active { transform: scale(0.92); }
         .play-icon-svg { width: 45px; height: 45px; fill: var(--text-main); margin-left: 6px; }
-        
         #status-light { width: 10px; height: 10px; border-radius: 50%; background: #1e293b; transition: 0.2s; }
         .light-on { background: #10b981 !important; box-shadow: 0 0 15px #10b981; }
-        
         audio { height: 30px; width: 100%; filter: invert(0.9) hue-rotate(180deg); margin-top: 8px; opacity: 0.7; }
-        
         textarea::placeholder { color: #475569; font-weight: 100; }
         summary { list-style: none; outline: none; }
         summary::-webkit-details-marker { display: none; }
     </style>
 </head>
 <body class="p-6">
-
     <div id="blackout-overlay"><div onclick="requestUnlock()" class="unlock-trigger"></div></div>
-    
     <div class="w-full max-w-md mx-auto flex flex-col min-h-screen">
         <header class="flex justify-between items-baseline mb-6">
             <div>
                 <h1 class="text-xl font-black italic tracking-tighter uppercase text-blue-600 leading-none">Peegel</h1>
-                <p class="text-[7px] tracking-[0.3em] text-slate-700 font-bold mt-0.5 ml-0.5 uppercase">v34.6</p>
+                <p class="text-[7px] tracking-[0.3em] text-slate-700 font-bold mt-0.5 ml-0.5 uppercase">v34.7</p>
             </div>
             <div id="clock" class="text-2xl font-[100] text-amber-500/60 font-mono tracking-tighter text-right leading-none">00:00:00</div>
         </header>
@@ -69,47 +60,35 @@
                     <div class="flex items-center gap-4">
                         <div id="status-light"></div>
                         <div class="font-mono text-[11px] font-[100] uppercase flex gap-4">
-                            <div class="text-green-400">Kõne <span id="speech-timer" class="text-emerald-300 ml-1 font-black">00:00</span></div>
-                            <div class="text-blue-500">Paus <span id="silence-timer" class="text-blue-300 ml-1 font-black">00:00</span></div>
+                            <div class="text-green-400">Kõne <span id="speech-timer" class="text-emerald-300 font-black">00:00</span></div>
+                            <div class="text-blue-500">Paus <span id="silence-timer" class="text-blue-300 font-black">00:00</span></div>
                         </div>
                     </div>
                     <div id="hz-indicator" class="text-[10px] font-mono font-light bg-red-950/30 px-3 py-1 rounded-full border border-red-900/20">
-                        <span class="text-red-600 mr-1">HZ</span> <span id="hz-min" class="text-orange-500 font-bold">-</span><span class="text-orange-900 mx-0.5">/</span><span id="hz-max" class="text-orange-500 font-bold">-</span>
+                        <span class="text-red-600">HZ</span> <span id="hz-min" class="text-orange-500 font-bold">-</span><span class="text-orange-900 mx-0.5">/</span><span id="hz-max" class="text-orange-500 font-bold">-</span>
                     </div>
                 </div>
                 <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 resize-none leading-relaxed font-[100]" placeholder="Kirjuta siia..."></textarea>
             </div>
             <div class="grid grid-cols-2 gap-4 pt-2">
-                <button onclick="fixNow()" class="bg-blue-600 text-white py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest shadow-lg active:scale-95 transition-transform">Fikseeri</button>
-                <button onclick="stopSession()" class="bg-red-900/20 text-red-500 py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest border border-red-900/20 active:scale-95 transition-transform">Lõpeta</button>
+                <button onclick="fixNow()" class="bg-blue-600 text-white py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest active:scale-95 transition-transform">Fikseeri</button>
+                <button onclick="stopSession()" class="bg-red-900/20 text-red-500 py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest border border-red-900/20 active:scale-95">Lõpeta</button>
             </div>
         </div>
-
         <div id="history-container" class="space-y-4 mt-8 pb-10"></div>
     </div>
 
     <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js').then(reg => {
-                    reg.update();
-                }).catch(() => {});
-            });
-        }
-
+        if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').then(reg => reg.update()).catch(() => {}); }); }
         let isLive = false, audioCtx, processor, stream, speechBuffer = [], sessionStart = null, speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0;
         const THRESHOLD = 0.008, PADDING_MS = 400; 
         let isSpeaking = false, silenceHoldFrames = 0;
-        
         function toggleBlackout(show) { document.getElementById('blackout-overlay').style.display = show ? 'block' : 'none'; }
         function requestUnlock() { if (prompt("Kood:") === "5") toggleBlackout(false); }
-        
         let db; const dbReq = indexedDB.open("Peegel_Database", 1);
         dbReq.onupgradeneeded = e => { db = e.target.result; if (!db.objectStoreNames.contains("sessions")) db.createObjectStore("sessions", { keyPath: "id" }); };
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
-        
         setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }, 1000);
-        
         async function startSession() {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -142,9 +121,8 @@
                 };
                 document.getElementById('setup-screen').classList.add('hidden');
                 document.getElementById('active-session').classList.remove('hidden');
-            } catch (err) { alert("Mikro viga!"); }
+            } catch (err) { alert("Viga!"); }
         }
-
         function fixNow() {
             if (speechBuffer.length === 0) return;
             const noteText = document.getElementById('note-input').value;
@@ -164,7 +142,6 @@
                 tx.oncomplete = renderHistory;
             };
         }
-
         function renderHistory() {
             if(!db) return;
             const tx = db.transaction("sessions", "readonly");
@@ -179,13 +156,10 @@
                                 <button onclick="delS(${s.id})" class="text-[9px] text-red-400/40 uppercase">Kustuta</button>
                             </div>
                         </div>
-                        <div class="flex flex-wrap gap-4 mb-4 font-mono text-[10px] uppercase font-light">
-                            <div class="text-green-400">Kõne: <span class="text-emerald-300 font-bold">${formatTime(s.stats.sMs)}</span></div>
-                            <div class="text-blue-500">Paus: <span class="text-blue-300 font-bold">${formatTime(s.stats.vMs)}</span></div>
-                        </div>
+                        <div class="flex flex-wrap gap-4 mb-4 font-mono text-[10px] uppercase font-light text-blue-500">Paus: <span class="text-blue-300 font-bold">${formatTime(s.stats.vMs)}</span></div>
                         <audio src="${s.audio}" controls></audio>
                         <div class="flex justify-between items-center mt-4">
-                            ${s.note ? `<details class="flex-grow"><summary class="text-slate-500 cursor-pointer text-[10px] uppercase font-bold">Märkmed</summary><div class="text-slate-400 italic mt-2 text-[11px] leading-relaxed whitespace-pre-wrap border-t border-white/5 pt-2 font-[100]">${s.note}</div></details>` : '<div></div>'}
+                            ${s.note ? `<details class="flex-grow"><summary class="text-slate-500 cursor-pointer text-[10px] uppercase font-bold">Märkmed</summary><div class="text-slate-400 italic mt-2 text-[11px] leading-relaxed border-t border-white/5 pt-2 font-[100]">${s.note}</div></details>` : '<div></div>'}
                             <button onclick="downloadHTML(${s.id})" class="text-amber-500/80 text-[10px] uppercase font-black tracking-widest border-b border-amber-500/20 pb-0.5 ml-4 shrink-0">HTML</button>
                         </div>
                     </div>`).join('');
