@@ -8,25 +8,18 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Peegel">
     
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="manifest.json?display=standalone">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2645/2645897.png">
 
-    <title>Peegel v33</title>
+    <title>Peegel v33.1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; height: 100vh; overflow: hidden; }
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
         .hidden { display: none !important; }
         
-        /* MUST EKRAAN */
         #blackout-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; }
-        
-        /* NÄHTAMATU LUKU ALA ALL VASAKUL */
-        .unlock-trigger { 
-            position: absolute; bottom: 0; left: 0; 
-            width: 120px; height: 120px; 
-            z-index: 10000; cursor: pointer;
-        }
+        .unlock-trigger { position: absolute; bottom: 0; left: 0; width: 120px; height: 120px; z-index: 10000; cursor: pointer; }
 
         .play-ring { width: 150px; height: 150px; border-radius: 50%; background: #1d4ed8; border: 5px solid #f4ead5; box-shadow: 0 0 30px rgba(244, 234, 213, 0.3); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.1s; }
         .play-ring:active { transform: scale(0.95); }
@@ -37,8 +30,8 @@
         .light-on { background: #22c55e !important; box-shadow: 0 0 10px #22c55e; }
         audio { height: 32px; width: 100%; border-radius: 8px; filter: invert(1) brightness(0.8); margin-top: 5px; }
         
-        #history-container::-webkit-scrollbar { display: none; }
         #history-container { -ms-overflow-style: none; scrollbar-width: none; overflow-y: auto; flex-grow: 1; }
+        #history-container::-webkit-scrollbar { display: none; }
     </style>
 </head>
 <body class="p-4 flex flex-col items-center">
@@ -58,7 +51,6 @@
                 <svg class="play-icon-svg" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg>
                 <div class="play-text">Alusta</div>
             </div>
-            <p class="mt-12 text-slate-600 text-[10px] uppercase tracking-[0.3em]">v33: LOGI + KOOD 5</p>
         </div>
 
         <div id="active-session" class="hidden space-y-3 text-left shrink-0">
@@ -79,8 +71,7 @@
                         </div>
                     </div>
                     <div class="text-right">
-                        <div class="text-[10px] text-slate-500 font-bold uppercase">HZ</div>
-                        <div class="font-mono text-xs font-bold text-amber-500"><span id="hz-min">-</span> / <span id="hz-max">-</span></div>
+                        <div class="text-[10px] text-slate-500 font-bold uppercase text-amber-500 font-mono"><span id="hz-min">-</span> / <span id="hz-max">-</span> HZ</div>
                     </div>
                 </div>
                 <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-20 text-slate-200 placeholder-slate-600 resize-none" placeholder="Kirjuta märkmed siia..."></textarea>
@@ -105,21 +96,14 @@
         const THRESHOLD = 0.008, PADDING_MS = 400; 
         let isSpeaking = false, silenceHoldFrames = 0;
 
-        function toggleBlackout(show) {
-            document.getElementById('blackout-overlay').style.display = show ? 'block' : 'none';
-        }
-
-        function requestUnlock() {
-            if (prompt("Sisesta kood:") === "5") {
-                toggleBlackout(false);
-            }
-        }
+        function toggleBlackout(show) { document.getElementById('blackout-overlay').style.display = show ? 'block' : 'none'; }
+        function requestUnlock() { if (prompt("Sisesta kood:") === "5") toggleBlackout(false); }
 
         let db;
-        const dbReq = indexedDB.open("Peegel_v32_Data", 1);
+        const dbReq = indexedDB.open("Peegel_Database", 1);
         dbReq.onupgradeneeded = e => {
-            let d = e.target.result;
-            if (!d.objectStoreNames.contains("sessions")) d.createObjectStore("sessions", { keyPath: "id" });
+            db = e.target.result;
+            if (!db.objectStoreNames.contains("sessions")) db.createObjectStore("sessions", { keyPath: "id" });
         };
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
@@ -134,8 +118,7 @@
                 const analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
                 source.connect(analyser); analyser.connect(processor); processor.connect(audioCtx.destination);
-                sessionStart = new Date(); speechMs = 0; silenceMs = 0; speechBuffer = []; hzMin = 9999; hzMax = 0;
-                isLive = true;
+                sessionStart = new Date(); speechMs = 0; silenceMs = 0; speechBuffer = []; hzMin = 9999; hzMax = 0; isLive = true;
                 processor.onaudioprocess = (e) => {
                     if (!isLive) return;
                     const input = e.inputBuffer.getChannelData(0); analyser.getByteFrequencyData(dataArray);
@@ -181,8 +164,6 @@
             };
         }
 
-        function stopSession() { isLive = false; setTimeout(() => location.reload(), 500); }
-
         function renderHistory() {
             if(!db) return;
             const tx = db.transaction("sessions", "readonly");
@@ -193,13 +174,14 @@
                         <div class="flex justify-between font-bold mb-3 items-center"><span class="text-green-400 text-[14px]">${s.start} - ${s.end}</span><button onclick="delS(${s.id})" class="text-[10px] text-red-500 bg-red-900/20 px-3 py-1 rounded-full">KUSTUTA</button></div>
                         <div class="text-[10px] text-slate-400 uppercase font-bold mb-2">Kõne: ${formatTime(s.stats.sMs)} | Vaikus: ${formatTime(s.stats.vMs)} | ${s.stats.hMin}-${s.stats.hMax}Hz</div>
                         <audio src="${s.audio}" controls class="w-full h-8 opacity-90"></audio>
-                        <div class="mt-2 text-right"><a href="${s.audio}" download="Peegel_${s.id}.wav" class="text-blue-400 underline mr-4 uppercase font-bold">WAV</a><button onclick="downloadHTML(${s.id})" class="text-amber-400 underline uppercase font-bold">HTML</button></div>
+                        <div class="mt-2 text-right"><a href="${s.audio}" download="Peegel_${s.id}.wav" class="text-blue-400 underline mr-4 uppercase font-bold text-[10px]">WAV</a><button onclick="downloadHTML(${s.id})" class="text-amber-400 underline uppercase font-bold text-[10px]">HTML</button></div>
                         ${s.note ? `<details class="mt-2"><summary class="text-slate-500 cursor-pointer">Märkmed</summary><div class="p-3 bg-black/40 text-[11px] mt-2 rounded-xl text-slate-300 italic whitespace-pre-wrap">${s.note}</div></details>` : ''}
                     </div>`).join('');
             };
         }
 
         function formatTime(ms) { const s = Math.floor(ms / 1000); return `${Math.floor(s/60)}m ${s%60}s`; }
+        function stopSession() { isLive = false; setTimeout(() => location.reload(), 500); }
         window.delS = id => { if(confirm("Kustuta?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id).onsuccess = renderHistory; } };
         window.downloadHTML = id => {
             db.transaction("sessions", "readonly").objectStore("sessions").get(id).onsuccess = (e) => {
