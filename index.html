@@ -7,40 +7,32 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <link rel="manifest" href="manifest.json">
-    <title>Peegel v32.9.2</title>
+    <title>Peegel v32.9.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* "BETOONIST RAAM" - see eemaldab navi riba */
+        /* 100dvh sunnib brauserit arvestama aadressiribaga */
         html, body { 
-            position: fixed; 
-            width: 100%; 
-            height: 100%; 
+            height: 100dvh; 
+            width: 100vw; 
             background-color: #020617; 
             color: #e2e8f0; 
-            overflow: hidden; /* Keelab kere kerimise */
-            margin: 0; padding: 0;
-            -webkit-tap-highlight-color: transparent;
+            overflow: hidden; 
+            margin: 0; padding: 0; 
+            position: fixed; /* Lukustab ekraani */
         }
-
-        /* See kast lubab sisu kerida, aga hoiab äpi raamis */
-        #app-container {
-            width: 100%;
+        
+        /* See on ainuke koht, mis kerib */
+        #scroll-container {
             height: 100%;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
-            padding: 20px;
-            padding-bottom: 150px; /* Varu, et sisu ei jääks serva alla */
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            padding-bottom: 120px; /* Ruumi alla */
         }
 
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
         .hidden { display: none !important; }
         #blackout-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; }
-        
         .unlock-btn { position: absolute; bottom: 40px; left: 40px; width: 80px; height: 80px; border-radius: 50%; cursor: pointer; opacity: 0; z-index: 10000; }
-        
         .play-ring { 
             width: 150px; height: 150px; border-radius: 50%; background: #1d4ed8; border: 5px solid #f4ead5; 
             box-shadow: 0 0 30px rgba(244, 234, 213, 0.3); display: flex; flex-direction: column; 
@@ -49,19 +41,6 @@
         #status-light { width: 14px; height: 14px; border-radius: 50%; background: #334155; transition: 0.05s; }
         .light-on { background: #22c55e !important; box-shadow: 0 0 15px #22c55e; }
         audio { height: 40px; width: 100%; filter: invert(1) brightness(1.5); margin-top: 10px; }
-        
-        /* Sessiooni teksti lahter */
-        #note-input {
-            width: 100%;
-            background: transparent; /* Sama värvi mis taust */
-            border-radius: 12px;
-            padding: 12px;
-            font-size: 14px;
-            height: 100px;
-            resize: none;
-            outline: none;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
     </style>
 </head>
 <body>
@@ -70,13 +49,13 @@
         <div onclick="requestUnlock()" class="unlock-btn"></div>
     </div>
     
-    <div id="app-container">
-        <div class="w-full max-w-md space-y-4 text-center">
+    <div id="scroll-container">
+        <div class="max-w-md mx-auto p-4 text-center">
             
             <div class="flex justify-between items-center py-4 px-2">
                 <div>
                     <h1 class="text-3xl font-black italic uppercase text-blue-500" onclick="location.reload()">Peegel</h1>
-                    <p class="text-[10px] text-slate-600 uppercase tracking-widest text-left ml-1">v32.9.2</p>
+                    <p class="text-[10px] text-slate-600 uppercase tracking-widest text-left ml-1">v32.9.3</p>
                 </div>
                 <div id="clock" class="text-xl font-light text-amber-600 font-mono">00:00:00</div>
             </div>
@@ -108,7 +87,7 @@
                         </div>
                     </div>
                     <div class="pt-2 border-t border-white/5">
-                        <textarea id="note-input" placeholder="Kirjuta märkmed siia..."></textarea>
+                        <textarea id="note-input" class="w-full bg-transparent rounded-xl p-2 text-sm focus:outline-none h-24 text-slate-200 placeholder-slate-700 resize-none" placeholder="Märkmed..."></textarea>
                     </div>
                 </div>
 
@@ -123,14 +102,7 @@
     </div>
 
     <script>
-        // TEHNILINE: DataURI -> Blob konverter (Heli parandamiseks)
-        function dataURLtoBlob(dataurl) {
-            var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
-                bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
-            while(n--){ u8arr[n] = bstr.charCodeAt(n); }
-            return new Blob([u8arr], {type:mime});
-        }
-
+        // SERVICE WORKER - Tagab offline toe
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('data:application/javascript;base64,c2VsZi5hZGRFdmVudExpc3RlbmVyKCdpbnN0YWxsJywgZSA9PiBzZWxmLnNraXBXYWl0aW5nKCkpOwpzZWxmLmFkZEV2ZW50TGlzdGVuZXIoJ2ZldGNoJywgZSA9PiBlLnJlc3BvbmRXaXRoKGZldGNoKGUucmVxdWVzdCkpKTs=');
         }
@@ -148,10 +120,22 @@
         }
 
         let db;
-        // UUS ANDMEBAAS V11 - et vana "katkine" heli ei segaks
-        const dbReq = indexedDB.open("Peegel_V11_DB", 1);
-        dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
-        dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
+        // PÜSIV ANDMEBAAS - Ära muuda nime, et andmed säiliks!
+        const dbReq = indexedDB.open("Peegel_Permanent_Storage", 1);
+        
+        dbReq.onupgradeneeded = e => { 
+            const d = e.target.result;
+            if (!d.objectStoreNames.contains("sessions")) {
+                d.createObjectStore("sessions", { keyPath: "id" });
+            }
+        };
+        
+        dbReq.onsuccess = e => { 
+            db = e.target.result; 
+            renderHistory(); 
+        };
+        
+        dbReq.onerror = e => { alert("Andmebaasi viga! Proovi lehte uuendada."); };
 
         setInterval(() => { 
             document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE');
@@ -161,7 +145,7 @@
             try {
                 if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                audioCtx = new AudioContext();
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioCtx.createMediaStreamSource(stream);
                 processor = audioCtx.createScriptProcessor(4096, 1, 1);
                 const analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
@@ -191,7 +175,7 @@
                 };
                 document.getElementById('setup-screen').classList.add('hidden');
                 document.getElementById('active-session').classList.remove('hidden');
-            } catch (err) { alert("Viga!"); }
+            } catch (err) { alert("Mikrofoni viga! Kontrolli seadeid."); }
         }
 
         function fixNow(isManual = true) {
@@ -199,17 +183,26 @@
             const note = document.getElementById('note-input').value;
             const startT = sessionStart.toLocaleTimeString('et-EE'), endT = new Date().toLocaleTimeString('et-EE');
             const buf = [...speechBuffer], sM = speechMs, vM = silenceMs, hMi = hzMin, hMa = hzMax;
+            
             if(isManual) {
                 speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0; sessionStart = new Date(); lastAutoSaveSpeechMs = 0;
                 document.getElementById('note-input').value = "";
             }
+
+            // Teeme Blobiks ja siis Base64-ks, et IndexedDB-sse salvestada
             const blob = new Blob([new Float32Array(buf.flat())], { type: 'audio/wav' });
             const reader = new FileReader();
             reader.readAsDataURL(blob);
             reader.onloadend = () => {
                 const tx = db.transaction("sessions", "readwrite");
-                tx.objectStore("sessions").add({ id: Date.now(), start: startT, end: endT, note: note, audio: reader.result, stats: { sMs: sM, vMs: vM, hMin: hMi, hMax: hMa } });
+                tx.objectStore("sessions").add({ 
+                    id: Date.now(), 
+                    start: startT, end: endT, note: note, 
+                    audio: reader.result, // See on Base64 string
+                    stats: { sMs: sM, vMs: vM, hMin: hMi, hMax: hMa } 
+                });
                 tx.oncomplete = renderHistory;
+                tx.onerror = () => alert("Salvestamine ebaõnnestus!");
             };
         }
 
@@ -218,16 +211,7 @@
             const tx = db.transaction("sessions", "readonly");
             tx.objectStore("sessions").getAll().onsuccess = e => {
                 const list = e.target.result.sort((a,b) => b.id - a.id);
-                document.getElementById('history-container').innerHTML = list.map(s => {
-                    // SIIN ON PARANDUS: Teeme audioBlob URL-i, et brauser suudaks seda mängida
-                    // See väldib Play nupu mitte töötamist
-                    let audioSrc = "";
-                    try {
-                        const blob = dataURLtoBlob(s.audio);
-                        audioSrc = URL.createObjectURL(blob);
-                    } catch(err) { audioSrc = s.audio; } // Fallback
-
-                    return `
+                document.getElementById('history-container').innerHTML = list.map(s => `
                     <div class="glass rounded-[35px] p-6 mb-4 text-xs shadow-lg border border-white/5">
                         <div class="flex justify-between items-center font-bold mb-3">
                             <span class="text-green-400 text-[14px]">${s.start} - ${s.end}</span>
@@ -241,17 +225,12 @@
                             <span><span class="text-blue-400">Vaikus:</span> <span class="text-white ml-1">${formatTime(s.stats.vMs)}</span></span>
                         </div>
                         
-                        <audio src="${audioSrc}" controls preload="metadata"></audio>
+                        <audio src="${s.audio}" controls preload="none"></audio>
                         
-                        ${s.note ? `
-                        <details class="mt-3">
-                            <summary class="text-slate-400 cursor-pointer font-bold uppercase text-[10px] tracking-wider">Vaata märkmeid</summary>
-                            <div class="text-slate-300 italic mt-2 p-3 bg-black/30 rounded-xl border-l-2 border-blue-500 whitespace-pre-wrap">${s.note}</div>
-                        </details>` : ''}
+                        ${s.note ? `<details class="mt-3"><summary class="text-slate-400 cursor-pointer font-bold uppercase text-[10px]">Vaata märkmeid</summary><div class="text-slate-300 italic mt-2 p-3 bg-black/30 rounded-xl border-l-2 border-blue-500 whitespace-pre-wrap">${s.note}</div></details>` : ''}
                         
                         <div class="flex justify-end mt-3"><button onclick="downloadHTML(${s.id})" class="text-amber-500 font-bold text-[10px] uppercase underline">Laadi HTML</button></div>
-                    </div>`;
-                }).join('');
+                    </div>`).join('');
             };
         }
 
