@@ -7,87 +7,108 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <link rel="manifest" href="manifest.json?v=33.2.6">
-    
-    <title>Peegel v33.2.6</title>
+    <link rel="manifest" href='data:application/json,{"name":"Peegel","short_name":"Peegel","start_url":"index.html","display":"standalone","background_color":"#020617","theme_color":"#020617","icons":[{"src":"https://cdn-icons-png.flaticon.com/512/2645/2645897.png","sizes":"512x512","type":"image/png"}]}'>
+
+    <title>Peegel v34.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; height: 100vh; overflow: hidden; }
-        .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
+        :root { --bg: #020617; --glass: rgba(15, 23, 42, 0.6); --accent: #1d4ed8; --text-main: #f4ead5; }
+        body { background-color: var(--bg); color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; height: 100vh; overflow: hidden; }
+        
+        .glass-card { background: var(--glass); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5); }
         .hidden { display: none !important; }
+        
+        /* Must overlay koodiga avamiseks */
         #blackout-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; }
-        .unlock-trigger { position: absolute; bottom: 0; left: 0; width: 120px; height: 120px; z-index: 10000; cursor: pointer; }
-        .play-ring { width: 150px; height: 150px; border-radius: 50%; background: #1d4ed8; border: 5px solid #f4ead5; box-shadow: 0 0 30px rgba(244, 234, 213, 0.3); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.1s; }
-        .play-ring:active { transform: scale(0.95); }
-        .play-icon-svg { width: 50px; height: 50px; fill: #f4ead5; margin-left: 8px; margin-bottom: 5px; }
-        .play-text { color: #f4ead5; font-weight: 900; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; }
-        #status-light { width: 12px; height: 12px; border-radius: 50%; background: #334155; transition: 0.1s; }
-        .light-on { background: #22c55e !important; box-shadow: 0 0 10px #22c55e; }
-        audio { height: 32px; width: 100%; border-radius: 8px; filter: invert(1) brightness(0.8); margin-top: 5px; }
+        .unlock-trigger { position: absolute; bottom: 0; left: 0; width: 100px; height: 100px; z-index: 10000; cursor: pointer; }
+
+        /* Uuendatud Alusta nupp */
+        .play-ring { width: 140px; height: 140px; border-radius: 50%; background: var(--accent); border: 4px solid var(--text-main); box-shadow: 0 0 40px rgba(29, 78, 216, 0.4); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .play-ring:active { transform: scale(0.92); box-shadow: 0 0 20px rgba(29, 78, 216, 0.6); }
+        .play-icon-svg { width: 45px; height: 45px; fill: var(--text-main); margin-left: 6px; }
+
+        /* Oleku indikaator */
+        #status-light { width: 10px; height: 10px; border-radius: 50%; background: #1e293b; transition: 0.2s; }
+        .light-on { background: #10b981 !important; box-shadow: 0 0 15px #10b981; }
+
+        audio { height: 30px; width: 100%; filter: invert(0.9) hue-rotate(180deg); margin-top: 8px; opacity: 0.7; }
+        
         #history-container::-webkit-scrollbar { display: none; }
-        #history-container { -ms-overflow-style: none; scrollbar-width: none; overflow-y: auto; flex-grow: 1; }
+        #history-container { scrollbar-width: none; overflow-y: auto; flex-grow: 1; }
+        
+        textarea::placeholder { color: #475569; }
     </style>
 </head>
-<body class="p-4 flex flex-col items-center">
+<body class="p-6 flex flex-col items-center">
+
     <div id="blackout-overlay"><div onclick="requestUnlock()" class="unlock-trigger"></div></div>
-    <div class="w-full max-w-md space-y-3 text-center h-full flex flex-col">
-        <div class="flex justify-between items-center p-2 shrink-0">
-            <div class="text-left">
-                <h1 class="text-3xl font-black italic uppercase text-blue-500 leading-none">Peegel</h1>
-                <span class="text-[9px] text-slate-700 font-bold uppercase ml-1">v33.2.6</span>
+    
+    <div class="w-full max-w-md h-full flex flex-col">
+        <header class="flex justify-between items-end mb-8 shrink-0">
+            <div>
+                <h1 class="text-4xl font-black italic tracking-tighter uppercase text-blue-600 leading-none">Peegel</h1>
+                <p class="text-[10px] tracking-[0.4em] text-slate-500 font-bold mt-1 ml-1">V34.0 ZEN</p>
             </div>
-            <div id="clock" class="text-xl font-light text-amber-600">00:00:00</div>
+            <div class="text-right">
+                <div id="clock" class="text-2xl font-extralight text-amber-500/80 font-mono tracking-tighter">00:00:00</div>
+            </div>
+        </header>
+
+        <div id="setup-screen" class="flex-grow flex flex-col items-center justify-center">
+            <div onclick="startSession()" class="play-ring group">
+                <svg class="play-icon-svg" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z"/></svg>
+                <div class="text-[12px] font-black uppercase tracking-widest text-[#f4ead5] mt-2">Alusta</div>
+            </div>
         </div>
 
-        <div id="setup-screen" class="pt-16 pb-8 flex flex-col items-center shrink-0">
-            <div onclick="startSession()" class="play-ring">
-                <svg class="play-icon-svg" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg>
-                <div class="play-text">Alusta</div>
+        <div id="active-session" class="hidden space-y-4 shrink-0">
+            <div class="flex justify-end">
+                <button onclick="toggleBlackout(true)" class="text-[10px] font-bold text-slate-500 uppercase px-4 py-2 rounded-full border border-white/10 glass-card">Pimenda</button>
             </div>
-        </div>
-
-        <div id="active-session" class="hidden space-y-3 text-left shrink-0">
-            <div class="flex justify-end pr-2"><button onclick="toggleBlackout(true)" class="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2 bg-slate-800/30 px-3 py-1 rounded-full border border-white/5"><span>Pimenda</span><div class="w-2 h-2 bg-black rounded-full border border-slate-600"></div></button></div>
             
-            <div class="glass rounded-[35px] p-5 space-y-3 border-t border-blue-500/20 shadow-2xl">
-                <div class="flex justify-between items-center border-b border-white/5 pb-2">
+            <div class="glass-card rounded-[40px] p-6 space-y-4">
+                <div class="flex justify-between items-center border-b border-white/5 pb-4">
                     <div class="flex items-center gap-4">
                         <div id="status-light"></div>
-                        <div class="font-mono text-xs font-bold uppercase flex gap-4">
-                            <div class="text-green-400">Kõne: <span id="speech-timer">00:00</span></div>
-                            <div class="text-blue-500">Paus: <span id="silence-timer" class="text-blue-400">00:00</span></div>
+                        <div class="flex gap-4 font-mono text-[11px] font-bold uppercase">
+                            <div class="text-emerald-500">Kõne <span id="speech-timer" class="text-emerald-300 ml-1">00:00</span></div>
+                            <div class="text-blue-500">Paus <span id="silence-timer" class="text-blue-300 ml-1">00:00</span></div>
                         </div>
                     </div>
-                    <div class="text-right">
-                        <div id="hz-indicator" class="text-[10px] font-mono font-bold">
-                            <span class="text-red-600">HZ</span> <span id="hz-min" class="text-orange-500">-</span><span class="text-orange-500">/</span><span id="hz-max" class="text-orange-500">-</span>
-                        </div>
+                    <div id="hz-indicator" class="text-[10px] font-mono font-bold bg-red-950/30 px-3 py-1 rounded-full border border-red-900/20">
+                        <span class="text-red-500 mr-1">HZ</span> <span id="hz-min" class="text-orange-400">-</span><span class="text-orange-800 mx-0.5">/</span><span id="hz-max" class="text-orange-400">-</span>
                     </div>
                 </div>
-                <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-20 text-slate-200 placeholder-slate-600 resize-none" placeholder="Kirjuta märkmed siia..."></textarea>
+                <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 resize-none leading-relaxed" placeholder="Mõtted siia..."></textarea>
             </div>
 
-            <div class="grid grid-cols-2 gap-3">
-                <button onclick="fixNow()" class="bg-blue-600 text-white py-4 rounded-[25px] font-bold uppercase text-xs active:scale-95 shadow-lg">Fikseeri</button>
-                <button onclick="stopSession()" class="bg-red-900/40 text-red-500 py-4 rounded-[25px] font-bold uppercase text-xs active:scale-95">Lõpeta</button>
+            <div class="grid grid-cols-2 gap-4 pt-2">
+                <button onclick="fixNow()" class="bg-blue-600 text-white py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest shadow-lg active:scale-95 transition-transform">Fikseeri</button>
+                <button onclick="stopSession()" class="bg-red-950/30 text-red-500 py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest border border-red-900/20 active:scale-95 transition-transform">Lõpeta</button>
             </div>
         </div>
-        <div id="history-container" class="space-y-3 pb-24 text-left w-full mt-4 flex-grow overflow-y-auto"></div>
+
+        <div id="history-container" class="space-y-4 mt-6"></div>
     </div>
 
     <script>
         if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(() => {}); }
+        
         let isLive = false, audioCtx, processor, stream, speechBuffer = []; 
         let sessionStart = null, speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0;
         const THRESHOLD = 0.008, PADDING_MS = 400; 
         let isSpeaking = false, silenceHoldFrames = 0;
+
         function toggleBlackout(show) { document.getElementById('blackout-overlay').style.display = show ? 'block' : 'none'; }
         function requestUnlock() { if (prompt("Kood:") === "5") toggleBlackout(false); }
+
         let db;
         const dbReq = indexedDB.open("Peegel_Database", 1);
         dbReq.onupgradeneeded = e => { db = e.target.result; if (!db.objectStoreNames.contains("sessions")) db.createObjectStore("sessions", { keyPath: "id" }); };
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
+
         setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }, 1000);
+
         async function startSession() {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -120,15 +141,16 @@
                 };
                 document.getElementById('setup-screen').classList.add('hidden');
                 document.getElementById('active-session').classList.remove('hidden');
-            } catch (err) { alert("Viga!"); }
+            } catch (err) { alert("Mikrofoni viga!"); }
         }
+
         function fixNow() {
             if (speechBuffer.length === 0) return;
             const noteText = document.getElementById('note-input').value;
             const startT = sessionStart.toLocaleTimeString('et-EE'), endT = new Date().toLocaleTimeString('et-EE');
             const buf = [...speechBuffer], sM = speechMs, vM = silenceMs, hMi = hzMin, hMa = hzMax;
             speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0; sessionStart = new Date();
-            document.getElementById('note-input').value = ""; document.getElementById('hz-min').innerText = "-"; document.getElementById('hz-max').innerText = "-";
+            document.getElementById('note-input').value = "";
             const sr = audioCtx.sampleRate, length = buf.reduce((a, c) => a + c.length, 0);
             const wavBuffer = new ArrayBuffer(44 + length * 2); const view = new DataView(wavBuffer);
             const writeS = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
@@ -141,36 +163,38 @@
                 tx.oncomplete = renderHistory;
             };
         }
+
         function renderHistory() {
             if(!db) return;
             const tx = db.transaction("sessions", "readonly");
             tx.objectStore("sessions").getAll().onsuccess = e => {
                 const list = e.target.result.sort((a,b) => b.id - a.id);
                 document.getElementById('history-container').innerHTML = list.map(s => `
-                    <div class="glass rounded-[30px] p-5 mb-4 text-xs">
-                        <div class="flex justify-between font-bold mb-3 items-center">
-                            <span class="text-green-400 text-[14px]">${s.start} - ${s.end}</span>
-                            <div class="flex items-center gap-3">
-                                <span class="text-[10px] font-mono font-bold"><span class="text-red-600">HZ:</span> <span class="text-orange-500">${s.stats.hMin}-${s.stats.hMax}</span></span>
-                                <button onclick="delS(${s.id})" class="text-[10px] text-red-500 bg-red-900/20 px-3 py-1 rounded-full uppercase">Kustuta</button>
-                            </div>
+                    <div class="glass-card rounded-[32px] p-5 mb-4 text-xs">
+                        <div class="flex justify-between items-center mb-4">
+                            <span class="text-emerald-400 font-bold text-[14px]">${s.start} <span class="text-slate-600 font-light mx-1">/</span> ${s.end}</span>
+                            <button onclick="delS(${s.id})" class="text-[9px] text-red-400/60 hover:text-red-400 uppercase tracking-tighter">Kustuta</button>
                         </div>
-                        <div class="font-mono text-[10px] uppercase font-bold mb-2 flex gap-3">
-                            <div class="text-green-400">Kõne: <span class="text-cyan-400">${formatTime(s.stats.sMs)}</span></div>
-                            <div class="text-blue-500">Paus: <span class="text-blue-400">${formatTime(s.stats.vMs)}</span></div>
+                        <div class="flex flex-wrap gap-4 mb-4 font-mono text-[10px] uppercase">
+                            <div><span class="text-slate-500">Kõne</span> <span class="text-emerald-500">${formatTime(s.stats.sMs)}</span></div>
+                            <div><span class="text-slate-500">Paus</span> <span class="text-blue-500">${formatTime(s.stats.vMs)}</span></div>
+                            <div><span class="text-slate-500">HZ</span> <span class="text-orange-500">${s.stats.hMin}-${s.stats.hMax}</span></div>
                         </div>
-                        <audio src="${s.audio}" controls class="w-full h-8 opacity-90"></audio>
-                        <div class="mt-2 text-right"><button onclick="downloadHTML(${s.id})" class="text-amber-400 underline uppercase font-bold text-[10px]">HTML</button></div>
-                        ${s.note ? `<details class="mt-2"><summary class="text-slate-500 cursor-pointer">Märkmed</summary><div class="p-3 bg-black/40 text-[11px] mt-2 rounded-xl text-slate-300 italic whitespace-pre-wrap">${s.note}</div></details>` : ''}
+                        <audio src="${s.audio}" controls></audio>
+                        <div class="flex justify-end mt-4">
+                            <button onclick="downloadHTML(${s.id})" class="text-amber-500/80 text-[10px] uppercase font-black tracking-widest border-b border-amber-500/20 pb-0.5">Laadi HTML</button>
+                        </div>
+                        ${s.note ? `<details class="mt-4 border-t border-white/5 pt-3"><summary class="text-slate-500 cursor-pointer text-[10px] uppercase font-bold">Märkmed</summary><div class="text-slate-300 italic mt-2 text-[11px] leading-relaxed">${s.note}</div></details>` : ''}
                     </div>`).join('');
             };
         }
+
         function formatTime(ms) { const s = Math.round(ms / 1000); return `${Math.floor(s/60)}m ${s%60}s`; }
         function stopSession() { isLive = false; setTimeout(() => location.reload(), 500); }
-        window.delS = id => { if(confirm("Kustuta?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id).onsuccess = renderHistory; } };
+        window.delS = id => { if(confirm("Kustuta see sessioon?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id).onsuccess = renderHistory; } };
         window.downloadHTML = id => {
             db.transaction("sessions", "readonly").objectStore("sessions").get(id).onsuccess = (e) => {
-                const s = e.target.result; const h = `<html><body style="background:#020617;color:#eee;padding:40px;font-family:sans-serif;"><h1>${s.start}-${s.end}</h1><audio controls src="${s.audio}" style="width:100%"></audio><p>${s.note || ""}</p></body></html>`;
+                const s = e.target.result; const h = `<html><body style="background:#020617;color:#eee;padding:40px;font-family:sans-serif;"><h1>${s.start}-${s.end}</h1><audio controls src="${s.audio}"></audio><p>${s.note || ""}</p></body></html>`;
                 const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([h], {type: 'text/html'})); a.download = `Sessioon_${s.id}.html`; a.click();
             };
         }
