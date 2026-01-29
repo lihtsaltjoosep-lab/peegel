@@ -12,7 +12,7 @@
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2645/2645897.png">
 
-    <title>Peegel v34.4</title>
+    <title>Peegel v34.5</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;900&display=swap');
@@ -45,15 +45,15 @@
     <div id="blackout-overlay"><div onclick="requestUnlock()" class="unlock-trigger"></div></div>
     
     <div class="w-full max-w-md mx-auto flex flex-col min-h-screen">
-        <header class="flex justify-between items-end mb-8">
+        <header class="flex justify-between items-baseline mb-6">
             <div>
-                <h1 class="text-4xl font-black italic tracking-tighter uppercase text-blue-600 leading-none">Peegel</h1>
-                <p class="text-[9px] tracking-[0.4em] text-slate-500 font-bold mt-1 ml-1">V34.4 ZEN</p>
+                <h1 class="text-2xl font-black italic tracking-tighter uppercase text-blue-600 leading-none">Peegel</h1>
+                <p class="text-[8px] tracking-[0.3em] text-slate-600 font-bold mt-0.5 ml-0.5">FIX2 v34.5</p>
             </div>
-            <div id="clock" class="text-3xl font-[100] text-amber-500/80 font-mono tracking-tighter text-right">00:00:00</div>
+            <div id="clock" class="text-2xl font-[100] text-amber-500/70 font-mono tracking-tighter text-right leading-none">00:00:00</div>
         </header>
 
-        <div id="setup-screen" class="py-20 flex flex-col items-center justify-center">
+        <div id="setup-screen" class="py-16 flex flex-col items-center justify-center">
             <div onclick="startSession()" class="play-ring group">
                 <svg class="play-icon-svg" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z"/></svg>
                 <div class="text-[12px] font-black uppercase tracking-widest text-[#f4ead5] mt-2">Alusta</div>
@@ -89,9 +89,15 @@
     </div>
 
     <script>
-        // SERVICE WORKER ON KOHUSTUSLIK INSTALLI JAOKS
+        // SERVICE WORKER KONTROLL JA REGISTREERIMINE (Naviriba Fix)
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').then(() => console.log("SW OK")).catch(() => {});
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').then(reg => {
+                    console.log('SW registreeritud!');
+                    // Sunnime kohese uuenduse, et naviriba kaoks
+                    reg.update();
+                }).catch(err => console.log('SW viga:', err));
+            });
         }
 
         let isLive = false, audioCtx, processor, stream, speechBuffer = [], sessionStart = null, speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0;
