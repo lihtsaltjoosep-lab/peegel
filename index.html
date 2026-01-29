@@ -48,10 +48,7 @@
                 <div id="clock" class="clock">00:00:00</div>
             </div>
             <div id="setup-screen">
-                <div onclick="startSession()" class="play-ring">
-                    <svg viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z"></path></svg>
-                    <div class="play-text">Alusta</div>
-                </div>
+                <div onclick="startSession()" class="play-ring"><svg viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z"></path></svg><div class="play-text">Alusta</div></div>
             </div>
             <div id="active-session" class="hidden">
                 <div class="glass">
@@ -73,7 +70,6 @@
         </div>
     </div>
     <script>
-        // See rida toob installi nupu tagasi
         if ('serviceWorker' in navigator) { navigator.serviceWorker.register('data:application/javascript;base64,c2VsZi5hZGRFdmVudExpc3RlbmVyKCdpbnN0YWxsJywgKCUpID0+IHNlbGYuc2tpcFdhaXRpbmcoKSk7IHNlbGYuYWRkRXZlbnRMaXN0ZW5lcignZmV0Y2gnLCAoZSkgPT4gZS5yZXNwb25kV2l0aChmZXRjaChlLnJlcXVlc3QpKSk7'); }
 
         let isLive = false, audioCtx, processor, stream, speechBuffer = [], sessionStart, speechMs = 0, silenceMs = 0, db;
@@ -82,7 +78,7 @@
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
         function updateClock() { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }
-        setInterval(updateClock, 1000);
+        setInterval(updateClock, 1000); updateClock();
 
         async function startSession() {
             try {
@@ -93,6 +89,7 @@
                 source.connect(processor); processor.connect(audioCtx.destination);
                 sessionStart = new Date(); isLive = true;
                 processor.onaudioprocess = (e) => {
+                    if (!isLive) return;
                     const input = e.inputBuffer.getChannelData(0);
                     let sum = 0; for(let i=0; i<input.length; i++) sum += input[i]*input[i];
                     const rms = Math.sqrt(sum/input.length);
@@ -109,34 +106,42 @@
                 };
                 document.getElementById('setup-screen').classList.add('hidden');
                 document.getElementById('active-session').classList.remove('hidden');
-            } catch(e) { alert("Luba mikrofon!"); }
+            } catch(e) { alert("Mikrofon on vajalik!"); }
         }
 
         function fixNow() {
             if (speechBuffer.length === 0) return;
             const note = document.getElementById('note-input').value;
+            const combinedBuffer = new Float32Array(speechBuffer.reduce((acc, b) => acc + b.length, 0));
+            let offset = 0;
+            for (let b of speechBuffer) { combinedBuffer.set(b, offset); offset += b.length; }
             const reader = new FileReader();
-            reader.readAsDataURL(new Blob([new Float32Array(speechBuffer.flat())], { type: 'audio/wav' }));
+            reader.readAsDataURL(new Blob([combinedBuffer], { type: 'audio/wav' }));
             reader.onloadend = () => {
                 const tx = db.transaction("sessions", "readwrite");
-                tx.objectStore("sessions").add({ id: Date.now(), start: sessionStart.toLocaleTimeString(), note, audio: reader.result });
-                tx.oncomplete = () => { speechBuffer = []; speechMs = 0; silenceMs = 0; document.getElementById('note-input').value = ""; renderHistory(); };
+                tx.objectStore("sessions").add({ id: Date.now(), start: sessionStart.toLocaleTimeString('et-EE'), note, audio: reader.result });
+                tx.oncomplete = () => { 
+                    speechBuffer = []; speechMs = 0; silenceMs = 0; 
+                    document.getElementById('note-input').value = ""; 
+                    renderHistory(); 
+                };
             };
         }
 
         function renderHistory() {
+            if(!db) return;
             const tx = db.transaction("sessions", "readonly");
             tx.objectStore("sessions").getAll().onsuccess = e => {
                 const list = e.target.result.sort((a,b) => b.id - a.id);
                 document.getElementById('history-container').innerHTML = list.map(s => `
                     <div class="history-card">
-                        <div style="color:#4ade80">${s.start}</div>
+                        <div style="color:#4ade80; font-weight:bold; margin-bottom:8px;">${s.start}</div>
                         <audio src="${s.audio}" controls></audio>
-                        <div style="font-size:12px; color:#cbd5e1">${s.note || ""}</div>
+                        <div style="font-size:12px; color:#cbd5e1; margin-top:8px;">${s.note || "Märkmed puuduvad"}</div>
                     </div>`).join('');
             };
         }
-        function stopSession() { location.reload(); }
+        function stopSession() { isLive = false; location.reload(); }
     </script>
 </body>
 </html>
