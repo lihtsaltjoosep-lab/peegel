@@ -4,9 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#020617">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="./manifest.json">
-    <link rel="icon" type="image/png" href="./icon.png">
-    <title>MIR</title>
+    <title>Peegel</title>
     <style>
         :root { --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -15,9 +17,7 @@
         .main-scroll { height: 100vh; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px; padding-top: calc(20px + var(--sat)); padding-bottom: 120px; }
         .container { max-width: 450px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 24px; text-align: center; }
         .header { display: flex; justify-content: space-between; align-items: center; padding: 8px; }
-        .logo-box { display: flex; align-items: center; gap: 10px; }
-        .eye-icon { width: 32px; height: 32px; background: #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid #fff; }
-        .logo { font-size: 30px; font-weight: 900; font-style: italic; text-transform: uppercase; color: #fff; margin: 0; letter-spacing: 2px; }
+        .logo { font-size: 30px; font-weight: 900; font-style: italic; text-transform: uppercase; color: #3b82f6; margin: 0; }
         .clock { font-size: 20px; font-weight: 300; color: #d97706; font-variant-numeric: tabular-nums; }
         .play-ring { width: 150px; height: 150px; border-radius: 50%; background: #1d4ed8; border: 5px solid #f4ead5; box-shadow: 0 0 30px rgba(244, 234, 213, 0.3); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; margin: 80px auto 30px; }
         .play-ring svg { width: 48px; height: 48px; fill: #f4ead5; margin-left: 8px; margin-bottom: 4px; }
@@ -49,8 +49,11 @@
     <div id="blackout-overlay"><div onclick="requestUnlock()" class="unlock-btn"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.02)" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></div></div>
     <div class="main-scroll">
         <div class="container">
-            <div class="header"><div class="logo-box"><div class="eye-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></div><h1 class="logo">MIR</h1></div><div id="clock" class="clock">00:00:00</div></div>
-            <div id="setup-screen"><div onclick="startSession()" class="play-ring"><svg viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z"></path></svg><div class="play-text">Alusta</div></div><p style="margin-top:48px; color:#475569; font-size:10px; text-transform:uppercase; letter-spacing:0.3em;">v32.9.36 • Install Ready</p></div>
+            <div class="header">
+                <h1 class="logo">Peegel</h1>
+                <div id="clock" class="clock">00:00:00</div>
+            </div>
+            <div id="setup-screen"><div onclick="startSession()" class="play-ring"><svg viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z"></path></svg><div class="play-text">Alusta</div></div><p style="margin-top:48px; color:#475569; font-size:10px; text-transform:uppercase; letter-spacing:0.3em;">v32.9.37 • Back to Basics</p></div>
             <div id="active-session" class="hidden">
                 <div style="display: flex; justify-content: flex-end; gap: 8px;"><button onclick="toggleNote()" class="btn-dim" id="note-btn">MÄRKMED</button><button onclick="toggleBlackout()" class="btn-dim">PIMENDA</button></div>
                 <div class="glass" style="margin-top: 16px;">
@@ -66,19 +69,13 @@
         </div>
     </div>
     <script>
-        // See on see koodijupp, mis lubab installimist ilma vigadeta
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('data:application/javascript;base64,c2VsZi5hZGRFdmVudExpc3RlbmVyKCdpbnN0YWxsJywgKGUpID0+IGUud2FpdFVudGlsKHNlbGYuc2tpcFdhaXRpbmcoKSkpOwlzZWxmLmFkZEV2ZW50TGlzdGVuZXIoJ2ZldGNoJywgKGUpID0+IGUucmVzcG9uZFdpdGgoZmV0Y2goZS5yZXF1ZXN0KSkpOw==')
-            .then(() => console.log('SW Ready')).catch(() => {});
-        }
-
         let isLive = false, wakeLock = null, audioCtx, processor, stream, speechBuffer = [], sessionStart = null, speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0, lastAutoSaveSpeechMs = 0;
         const THRESHOLD = 0.005, PADDING_MS = 800, SPEECH_AUTO_SAVE_THRESHOLD = 600000, APP_PIN = "5";
         let isSpeaking = false, silenceHoldFrames = 0, db;
-        const dbReq = indexedDB.open("MIR_DB_Final", 1);
+        const dbReq = indexedDB.open("Peegel_Database_Final", 1);
         dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
-        
+
         function toggleBlackout() { document.getElementById('blackout-overlay').style.display = 'block'; }
         function requestUnlock() { const p = prompt("Sisesta kood:"); if (p === APP_PIN) document.getElementById('blackout-overlay').style.display = 'none'; else if (p !== null) alert("Vale!"); }
         
@@ -189,8 +186,8 @@
         window.downloadHTML = id => {
             db.transaction("sessions", "readonly").objectStore("sessions").get(id).onsuccess = (e) => {
                 const s = e.target.result;
-                const h = `<html><body style="background:#020617;color:#eee;font-family:sans-serif;padding:20px;"><h1>MIR: ${s.date}</h1><p>Kõne: ${formatTime(s.stats.sMs)}</p><audio controls src="${s.audio}"></audio><div>${s.note || ""}</div></body></html>`;
-                const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([h], {type: 'text/html'})); a.download = `MIR_${s.id}.html`; a.click();
+                const h = `<html><body style="background:#020617;color:#eee;font-family:sans-serif;padding:20px;"><h1>Peegel: ${s.date}</h1><p>Kõne: ${formatTime(s.stats.sMs)}</p><audio controls src="${s.audio}"></audio><div>${s.note || ""}</div></body></html>`;
+                const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([h], {type: 'text/html'})); a.download = `Peegel_${s.id}.html`; a.click();
             };
         }
     </script>
