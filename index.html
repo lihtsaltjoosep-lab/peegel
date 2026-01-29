@@ -7,31 +7,20 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.json">
-    <title>MIR v32.9.33</title>
+    <title>MIR v32.9.34</title>
     <style>
         :root { --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         html { background-color: #020617; overflow: hidden; height: 100%; }
-        body { 
-            background-color: #020617; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
-            margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; position: fixed; 
-        }
+        body { background-color: #020617; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; position: fixed; }
         .main-scroll { height: 100vh; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px; padding-top: calc(20px + var(--sat)); padding-bottom: 120px; }
         .container { max-width: 450px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 24px; text-align: center; }
-        
         .header { display: flex; justify-content: space-between; align-items: center; padding: 8px; }
-        
-        /* MIR LOGO JA SILM */
         .logo-box { display: flex; align-items: center; gap: 10px; }
         .eye-icon { width: 32px; height: 32px; background: #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid #fff; }
         .logo { font-size: 30px; font-weight: 900; font-style: italic; text-transform: uppercase; color: #fff; margin: 0; letter-spacing: 2px; }
-        
         .clock { font-size: 20px; font-weight: 300; color: #d97706; font-variant-numeric: tabular-nums; }
-        .play-ring { 
-            width: 150px; height: 150px; border-radius: 50%; background: #1d4ed8; border: 5px solid #f4ead5; 
-            box-shadow: 0 0 30px rgba(244, 234, 213, 0.3); display: flex; flex-direction: column; 
-            align-items: center; justify-content: center; cursor: pointer; margin: 80px auto 30px;
-        }
+        .play-ring { width: 150px; height: 150px; border-radius: 50%; background: #1d4ed8; border: 5px solid #f4ead5; box-shadow: 0 0 30px rgba(244, 234, 213, 0.3); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; margin: 80px auto 30px; }
         .play-ring svg { width: 48px; height: 48px; fill: #f4ead5; margin-left: 8px; margin-bottom: 4px; }
         .play-text { color: #f4ead5; font-weight: 900; font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; }
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); border-radius: 35px; padding: 24px; text-align: left; }
@@ -44,10 +33,7 @@
         .text-amber { color: #f59e0b; }
         .steel-blue { color: #60a5fa; opacity: 0.8; }
         .dark-orange { color: #ea580c; }
-        #note-input { 
-            width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #e2e8f0; font-size: 14px; 
-            height: 96px; resize: none; outline: none; padding: 12px; border-radius: 12px; margin-top: 12px; display: block;
-        }
+        #note-input { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #e2e8f0; font-size: 14px; height: 96px; resize: none; outline: none; padding: 12px; border-radius: 12px; margin-top: 12px; display: block; }
         .btn-grid { display: grid; grid-template-cols: 1fr 1fr; gap: 12px; }
         .btn { border: none; border-radius: 25px; padding: 20px; font-weight: bold; text-transform: uppercase; font-size: 12px; cursor: pointer; transition: transform 0.1s; }
         .btn-blue { background: #2563eb; color: white; }
@@ -62,92 +48,49 @@
 </head>
 <body onclick="window.scrollTo(0, 1);">
     <div id="blackout-overlay"><div onclick="requestUnlock()" class="unlock-btn"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.02)" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></div></div>
-
     <div class="main-scroll">
         <div class="container">
-            <div class="header">
-                <div class="logo-box">
-                    <div class="eye-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                    </div>
-                    <h1 class="logo">MIR</h1>
-                </div>
-                <div id="clock" class="clock">00:00:00</div>
-            </div>
-
-            <div id="setup-screen">
-                <div onclick="startSession()" class="play-ring">
-                    <svg viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z"></path></svg>
-                    <div class="play-text">Alusta</div>
-                </div>
-                <p style="margin-top:48px; color:#475569; font-size:10px; text-transform:uppercase; letter-spacing:0.3em;">v32.9.33 • MIR Project</p>
-            </div>
-
+            <div class="header"><div class="logo-box"><div class="eye-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></div><h1 class="logo">MIR</h1></div><div id="clock" class="clock">00:00:00</div></div>
+            <div id="setup-screen"><div onclick="startSession()" class="play-ring"><svg viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z"></path></svg><div class="play-text">Alusta</div></div><p style="margin-top:48px; color:#475569; font-size:10px; text-transform:uppercase; letter-spacing:0.3em;">v32.9.34 • MIR Project</p></div>
             <div id="active-session" class="hidden">
-                <div style="display: flex; justify-content: flex-end; gap: 8px;">
-                    <button onclick="toggleBlackout()" class="btn-dim">PIMENDA</button>
-                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 8px;"><button onclick="toggleBlackout()" class="btn-dim">PIMENDA</button></div>
                 <div class="glass" style="margin-top: 16px;">
                     <div class="status-row">
-                        <div style="display: flex; align-items: center;">
-                            <div id="status-light"></div>
-                            <div class="timer-box">
-                                <div class="text-green">Kõne: <span id="speech-timer">00:00</span></div>
-                                <div class="text-blue">Paus: <span id="silence-timer">00:00</span></div>
-                            </div>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-size: 10px; color: #64748b; font-weight: bold;">HZ</div>
-                            <div class="timer-box text-amber"><span id="hz-min">-</span> / <span id="hz-max">-</span></div>
-                        </div>
+                        <div style="display: flex; align-items: center;"><div id="status-light"></div><div class="timer-box"><div class="text-green">Kõne: <span id="speech-timer">00:00</span></div><div class="text-blue">Paus: <span id="silence-timer">00:00</span></div></div></div>
+                        <div style="text-align: right;"><div style="font-size: 10px; color: #64748b; font-weight: bold;">HZ</div><div class="timer-box text-amber"><span id="hz-min">-</span> / <span id="hz-max">-</span></div></div>
                     </div>
                     <textarea id="note-input" placeholder="Kirjuta märkmed siia..."></textarea>
                 </div>
-                <div class="btn-grid" style="margin-top: 24px;">
-                    <button onclick="fixNow(true)" class="btn btn-blue">Fikseeri</button>
-                    <button onclick="stopSession()" class="btn btn-red">Lõpeta</button>
-                </div>
+                <div class="btn-grid" style="margin-top: 24px;"><button onclick="fixNow(true)" class="btn btn-blue">Fikseeri</button><button onclick="stopSession()" class="btn btn-red">Lõpeta</button></div>
             </div>
             <div id="history-container"></div>
         </div>
     </div>
-
     <script>
         let isLive = false, wakeLock = null, audioCtx, processor, stream, speechBuffer = [], sessionStart = null, speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0, lastAutoSaveSpeechMs = 0;
         const THRESHOLD = 0.005, PADDING_MS = 800, SPEECH_AUTO_SAVE_THRESHOLD = 600000, APP_PIN = "5";
         let isSpeaking = false, silenceHoldFrames = 0, db;
-
         const dbReq = indexedDB.open("MIR_DB_Final", 1);
         dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
-
         function toggleBlackout() { document.getElementById('blackout-overlay').style.display = 'block'; }
         function requestUnlock() {
             const p = prompt("Sisesta kood:");
             if (p === APP_PIN) document.getElementById('blackout-overlay').style.display = 'none';
             else if (p !== null) alert("Vale!");
         }
-
         function updateClock() {
             const n = new Date();
             document.getElementById('clock').innerText = n.getHours().toString().padStart(2,'0') + ":" + n.getMinutes().toString().padStart(2,'0') + ":" + n.getSeconds().toString().padStart(2,'0');
         }
         setInterval(updateClock, 1000); updateClock();
-
         function formatTime(ms) { const s = Math.floor(ms / 1000); return Math.floor(s/60) + "m " + (s%60) + "s"; }
-
         window.toggleHistoryNote = id => {
             const el = document.getElementById(`hist-note-${id}`);
             const btn = document.getElementById(`hist-btn-${id}`);
-            if (el.classList.contains('hidden')) {
-                el.classList.remove('hidden');
-                btn.innerText = 'PEIDA MÄRKMED';
-            } else {
-                el.classList.add('hidden');
-                btn.innerText = 'VAATA MÄRKMEID';
-            }
+            if (el.classList.contains('hidden')) { el.classList.remove('hidden'); btn.innerText = 'PEIDA MÄRKMED'; } 
+            else { el.classList.add('hidden'); btn.innerText = 'VAATA MÄRKMEID'; }
         };
-
         async function startSession() {
             try {
                 if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
@@ -187,19 +130,15 @@
                 document.getElementById('active-session').classList.remove('hidden');
             } catch (err) { alert("Viga!"); }
         }
-
         function fixNow(isManual = true) {
             if (speechBuffer.length === 0) return;
             const noteText = document.getElementById('note-input').value;
             const startT = sessionStart.toLocaleTimeString('et-EE'), endT = new Date().toLocaleTimeString('et-EE');
             const buf = [...speechBuffer], sM = speechMs, vM = silenceMs, hMi = hzMin, hMa = hzMax;
             saveToDB(buf, startT, endT, noteText, sM, vM, hMi, hMa, isManual);
-            if (isManual) {
-                speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0; sessionStart = new Date(); lastAutoSaveSpeechMs = 0;
-                document.getElementById('note-input').value = "";
-            } else lastAutoSaveSpeechMs = speechMs;
+            if (isManual) { speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0; sessionStart = new Date(); lastAutoSaveSpeechMs = 0; document.getElementById('note-input').value = ""; } 
+            else lastAutoSaveSpeechMs = speechMs;
         }
-
         async function saveToDB(buffer, startT, endT, note, sMs, vMs, hMin, hMax, pinned) {
             const sr = audioCtx.sampleRate;
             const length = buffer.reduce((a, c) => a + c.length, 0);
@@ -221,7 +160,6 @@
                 tx.oncomplete = renderHistory;
             };
         }
-
         function renderHistory() {
             if(!db) return;
             const tx = db.transaction("sessions", "readonly");
@@ -238,14 +176,11 @@
                         <div style="display: flex; flex-direction: column; gap: 8px;">
                             ${s.note ? `<button onclick="toggleHistoryNote(${s.id})" id="hist-btn-${s.id}" class="btn-dim" style="width: 100%;">VAATA MÄRKMEID</button>
                             <div id="hist-note-${s.id}" class="hidden" style="padding: 12px; background: rgba(0,0,0,0.4); border-radius: 12px; color: #cbd5e1; font-style: italic; border-left: 2px solid #3b82f6;">${s.note}</div>` : ''}
-                            <div style="display: flex; justify-content: flex-end;">
-                                <button onclick="downloadHTML(${s.id})" style="background: none; border: none; color: #fbbf24; font-size: 10px; font-weight: bold;">HTML</button>
-                            </div>
+                            <div style="display: flex; justify-content: flex-end;"><button onclick="downloadHTML(${s.id})" style="background: none; border: none; color: #fbbf24; font-size: 10px; font-weight: bold;">HTML</button></div>
                         </div>
                     </div>`).join('');
             };
         }
-
         function stopSession() { fixNow(true); isLive = false; if(wakeLock) wakeLock.release(); setTimeout(() => location.reload(), 500); }
         window.delS = id => { if(confirm("Kustuta?")) { db.transaction("sessions", "readwrite").objectStore("sessions").delete(id).onsuccess = renderHistory; } };
         window.downloadHTML = id => {
