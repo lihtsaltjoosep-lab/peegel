@@ -7,31 +7,36 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <link rel="manifest" href="manifest.json">
-    <title>Peegel v32.10</title>
+    <title>Peegel v32.11</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* 1. SAMM: LUKUSTAME EKRAANI, ET RIBA KADUKS */
-        html, body { 
+        /* BRAUSERI RIBA EEMALDAMINE */
+        html {
+            height: 100dvh; /* Dynamic Viewport Height */
+            overflow: hidden;
+        }
+        body { 
             position: fixed; 
             width: 100%; 
-            height: 100%; 
+            height: 100dvh; 
             background-color: #020617; 
             color: #e2e8f0; 
-            overflow: hidden; /* Keelab kere kerimise */
+            font-family: sans-serif; 
             margin: 0; padding: 0;
+            overflow: hidden; 
             -webkit-tap-highlight-color: transparent;
+            overscroll-behavior: none;
         }
 
-        /* 2. SAMM: KERIME AINULT SEDA KASTI */
+        /* Keritav sisu */
         #scroll-wrapper {
-            width: 100%;
             height: 100%;
+            width: 100%;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
-            padding-bottom: 150px; /* Varu alla */
+            padding-bottom: 120px;
         }
 
-        /* DISAIN JÄÄB 100% SAMAKS */
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
         .hidden { display: none !important; }
         #blackout-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; }
@@ -64,7 +69,7 @@
             <div class="flex justify-between items-center py-4 px-2">
                 <div>
                     <h1 class="text-3xl font-black italic uppercase text-blue-500" onclick="location.reload()">Peegel</h1>
-                    <p class="text-[10px] text-slate-600 uppercase tracking-widest text-left ml-1">v32.10</p>
+                    <p class="text-[10px] text-slate-600 uppercase tracking-widest text-left ml-1">v32.11 WAV</p>
                 </div>
                 <div id="clock" class="text-xl font-light text-amber-600 font-mono">00:00:00</div>
             </div>
@@ -111,7 +116,38 @@
     </div>
 
     <script>
-        // TEHNILINE ABIMEES: Teeb teksti failiks (See parandab Play nupu)
+        // --- WAV ENCODER (See parandab Play nupu!) ---
+        function encodeWAV(samples, sampleRate) {
+            const buffer = new ArrayBuffer(44 + samples.length * 2);
+            const view = new DataView(buffer);
+            const writeString = (view, offset, string) => {
+                for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i));
+            };
+
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + samples.length * 2, true);
+            writeString(view, 8, 'WAVE');
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, 1, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 2, true);
+            view.setUint16(32, 2, true);
+            view.setUint16(34, 16, true);
+            writeString(view, 36, 'data');
+            view.setUint32(40, samples.length * 2, true);
+
+            let offset = 44;
+            for (let i = 0; i < samples.length; i++, offset += 2) {
+                let s = Math.max(-1, Math.min(1, samples[i]));
+                view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+            }
+            return new Blob([view], { type: 'audio/wav' });
+        }
+        // ---------------------------------------------
+
+        // ABIMEES: Base64 -> Blob
         function dataURLtoBlob(dataurl) {
             try {
                 var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
@@ -138,8 +174,8 @@
         }
 
         let db;
-        // Püsiv andmebaas
-        const dbReq = indexedDB.open("Peegel_Gold_DB", 1);
+        // Puhas start - uus andmebaas
+        const dbReq = indexedDB.open("Peegel_WAV_DB", 1);
         dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
@@ -151,7 +187,7 @@
             try {
                 if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                audioCtx = new AudioContext();
+                audioCtx = new AudioContext(); // Standardne konteks
                 const source = audioCtx.createMediaStreamSource(stream);
                 processor = audioCtx.createScriptProcessor(4096, 1, 1);
                 const analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
@@ -181,23 +217,29 @@
                 };
                 document.getElementById('setup-screen').classList.add('hidden');
                 document.getElementById('active-session').classList.remove('hidden');
-            } catch (err) { alert("Mikrofon on vajalik."); }
+            } catch (err) { alert("Mikrofon on vajalik!"); }
         }
 
         function fixNow(isManual = true) {
             if (speechBuffer.length === 0) return;
             const note = document.getElementById('note-input').value;
             const startT = sessionStart.toLocaleTimeString('et-EE'), endT = new Date().toLocaleTimeString('et-EE');
-            const buf = [...speechBuffer], sM = speechMs, vM = silenceMs, hMi = hzMin, hMa = hzMax;
+            const flatBuffer = new Float32Array(speechBuffer.reduce((acc, val) => acc + val.length, 0));
+            let offset = 0;
+            for (let buf of speechBuffer) { flatBuffer.set(buf, offset); offset += buf.length; }
+            
+            const sM = speechMs, vM = silenceMs, hMi = hzMin, hMa = hzMax;
             
             if(isManual) {
                 speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0; sessionStart = new Date(); lastAutoSaveSpeechMs = 0;
                 document.getElementById('note-input').value = "";
             }
 
-            const blob = new Blob([new Float32Array(buf.flat())], { type: 'audio/wav' });
+            // KASUTAME WAV ENCODERIT
+            const wavBlob = encodeWAV(flatBuffer, audioCtx.sampleRate);
+            
             const reader = new FileReader();
-            reader.readAsDataURL(blob);
+            reader.readAsDataURL(wavBlob);
             reader.onloadend = () => {
                 const tx = db.transaction("sessions", "readwrite");
                 tx.objectStore("sessions").add({ id: Date.now(), start: startT, end: endT, note: note, audio: reader.result, stats: { sMs: sM, vMs: vM, hMin: hMi, hMax: hMa } });
@@ -211,7 +253,6 @@
             tx.objectStore("sessions").getAll().onsuccess = e => {
                 const list = e.target.result.sort((a,b) => b.id - a.id);
                 document.getElementById('history-container').innerHTML = list.map(s => {
-                    // FIX: Teeme Blob URL-i, et audio mängiks
                     let audioSrc = s.audio;
                     const blob = dataURLtoBlob(s.audio);
                     if(blob) audioSrc = URL.createObjectURL(blob);
