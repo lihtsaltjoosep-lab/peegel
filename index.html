@@ -3,13 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#020617">
     
-    <link rel="manifest" href='data:application/json,{"name":"Peegel","short_name":"Peegel","start_url":"index.html","display":"standalone","background_color":"#020617","theme_color":"#020617","icons":[{"src":"https://cdn-icons-png.flaticon.com/512/2645/2645897.png","sizes":"512x512","type":"image/png"}]}'>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2645/2645897.png">
 
-    <title>Peegel v34.3</title>
+    <title>Peegel v34.4</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;900&display=swap');
@@ -45,7 +48,7 @@
         <header class="flex justify-between items-end mb-8">
             <div>
                 <h1 class="text-4xl font-black italic tracking-tighter uppercase text-blue-600 leading-none">Peegel</h1>
-                <p class="text-[9px] tracking-[0.4em] text-slate-500 font-bold mt-1 ml-1">V34.3 THIN</p>
+                <p class="text-[9px] tracking-[0.4em] text-slate-500 font-bold mt-1 ml-1">V34.4 ZEN</p>
             </div>
             <div id="clock" class="text-3xl font-[100] text-amber-500/80 font-mono tracking-tighter text-right">00:00:00</div>
         </header>
@@ -71,7 +74,7 @@
                         </div>
                     </div>
                     <div id="hz-indicator" class="text-[10px] font-mono font-light bg-red-950/30 px-3 py-1 rounded-full border border-red-900/20">
-                        <span class="text-red-500 mr-1">HZ</span> <span id="hz-min" class="text-orange-500 font-bold">-</span><span class="text-orange-900 mx-0.5">/</span><span id="hz-max" class="text-orange-500 font-bold">-</span>
+                        <span class="text-red-600 mr-1">HZ</span> <span id="hz-min" class="text-orange-500 font-bold">-</span><span class="text-orange-900 mx-0.5">/</span><span id="hz-max" class="text-orange-500 font-bold">-</span>
                     </div>
                 </div>
                 <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 resize-none leading-relaxed font-[200]" placeholder="Kirjuta siia..."></textarea>
@@ -86,16 +89,24 @@
     </div>
 
     <script>
-        if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(() => {}); }
+        // SERVICE WORKER ON KOHUSTUSLIK INSTALLI JAOKS
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').then(() => console.log("SW OK")).catch(() => {});
+        }
+
         let isLive = false, audioCtx, processor, stream, speechBuffer = [], sessionStart = null, speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0;
         const THRESHOLD = 0.008, PADDING_MS = 400; 
         let isSpeaking = false, silenceHoldFrames = 0;
+        
         function toggleBlackout(show) { document.getElementById('blackout-overlay').style.display = show ? 'block' : 'none'; }
         function requestUnlock() { if (prompt("Kood:") === "5") toggleBlackout(false); }
+        
         let db; const dbReq = indexedDB.open("Peegel_Database", 1);
         dbReq.onupgradeneeded = e => { db = e.target.result; if (!db.objectStoreNames.contains("sessions")) db.createObjectStore("sessions", { keyPath: "id" }); };
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
+        
         setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }, 1000);
+        
         async function startSession() {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -130,6 +141,7 @@
                 document.getElementById('active-session').classList.remove('hidden');
             } catch (err) { alert("Mikro viga!"); }
         }
+
         function fixNow() {
             if (speechBuffer.length === 0) return;
             const noteText = document.getElementById('note-input').value;
@@ -149,6 +161,7 @@
                 tx.oncomplete = renderHistory;
             };
         }
+
         function renderHistory() {
             if(!db) return;
             const tx = db.transaction("sessions", "readonly");
