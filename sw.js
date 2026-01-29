@@ -3,5 +3,10 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  event.respondWith(fetch(event.request));
+  // See on vajalik, et Chrome peaks äppi offline-võimeliseks
+  event.respondWith(
+    fetch(event.request).catch(() => {
+      return new Response("Offline mode active");
+    })
+  );
 });
