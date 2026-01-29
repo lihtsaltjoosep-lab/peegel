@@ -1,18 +1,18 @@
 {
-  "id": "peegel-app-v33",
+  "id": "/peegel-app/",
+  "scope": "/",
+  "start_url": "/index.html",
   "name": "Peegel",
   "short_name": "Peegel",
-  "start_url": "index.html",
-  "scope": ".",
   "display": "standalone",
+  "display_override": ["fullscreen", "minimal-ui"],
   "background_color": "#020617",
   "theme_color": "#020617",
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/2645/2645897.png",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     }
   ]
 }
