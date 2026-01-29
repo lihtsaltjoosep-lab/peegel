@@ -7,12 +7,15 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.json">
-    <title>MIR</title>
+    <title>Peegel v32.9.32</title>
     <style>
         :root { --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         html { background-color: #020617; overflow: hidden; height: 100%; }
-        body { background-color: #020617; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; position: fixed; }
+        body { 
+            background-color: #020617; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
+            margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; position: fixed; 
+        }
         .main-scroll { height: 100vh; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px; padding-top: calc(20px + var(--sat)); padding-bottom: 120px; }
         .container { max-width: 450px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 24px; text-align: center; }
         .header { display: flex; justify-content: space-between; align-items: center; padding: 8px; }
@@ -20,7 +23,11 @@
         .eye-icon { width: 32px; height: 32px; background: #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid #fff; }
         .logo { font-size: 30px; font-weight: 900; font-style: italic; text-transform: uppercase; color: #fff; margin: 0; letter-spacing: 2px; }
         .clock { font-size: 20px; font-weight: 300; color: #d97706; font-variant-numeric: tabular-nums; }
-        .play-ring { width: 150px; height: 150px; border-radius: 50%; background: #1d4ed8; border: 5px solid #f4ead5; box-shadow: 0 0 30px rgba(244, 234, 213, 0.3); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; margin: 80px auto 30px; }
+        .play-ring { 
+            width: 150px; height: 150px; border-radius: 50%; background: #1d4ed8; border: 5px solid #f4ead5; 
+            box-shadow: 0 0 30px rgba(244, 234, 213, 0.3); display: flex; flex-direction: column; 
+            align-items: center; justify-content: center; cursor: pointer; margin: 80px auto 30px;
+        }
         .play-ring svg { width: 48px; height: 48px; fill: #f4ead5; margin-left: 8px; margin-bottom: 4px; }
         .play-text { color: #f4ead5; font-weight: 900; font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; }
         .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); border-radius: 35px; padding: 24px; text-align: left; }
@@ -32,8 +39,8 @@
         .btn { border: none; border-radius: 25px; padding: 20px; font-weight: bold; text-transform: uppercase; font-size: 12px; cursor: pointer; }
         .btn-blue { background: #2563eb; color: white; }
         .btn-red { background: rgba(127, 29, 29, 0.4); color: #ef4444; }
-        .history-card { background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(255,255,255,0.05); border-radius: 30px; padding: 20px; margin-bottom: 16px; text-align: left; }
-        audio { height: 35px; width: 100%; filter: invert(1); margin: 12px 0; }
+        .history-card { background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(255,255,255,0.05); border-radius: 30px; padding: 20px; margin-bottom: 16px; font-size: 12px; text-align: left; }
+        audio { height: 35px; width: 100%; filter: invert(1); margin: 12px 0; opacity: 0.8; }
         .hidden { display: none !important; }
     </style>
 </head>
@@ -43,7 +50,7 @@
             <div class="header">
                 <div class="logo-box">
                     <div class="eye-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></div>
-                    <h1 class="logo">MIR</h1>
+                    <h1 class="logo">PEEGEL</h1>
                 </div>
                 <div id="clock" class="clock">00:00:00</div>
             </div>
@@ -73,7 +80,7 @@
         if ('serviceWorker' in navigator) { navigator.serviceWorker.register('data:application/javascript;base64,c2VsZi5hZGRFdmVudExpc3RlbmVyKCdpbnN0YWxsJywgKCUpID0+IHNlbGYuc2tpcFdhaXRpbmcoKSk7IHNlbGYuYWRkRXZlbnRMaXN0ZW5lcignZmV0Y2gnLCAoZSkgPT4gZS5yZXNwb25kV2l0aChmZXRjaChlLnJlcXVlc3QpKSk7'); }
 
         let isLive = false, audioCtx, processor, stream, speechBuffer = [], sessionStart, speechMs = 0, silenceMs = 0, db;
-        const dbReq = indexedDB.open("MIR_STABLE_DB", 1);
+        const dbReq = indexedDB.open("PeegelDB", 1);
         dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
@@ -135,9 +142,9 @@
                 const list = e.target.result.sort((a,b) => b.id - a.id);
                 document.getElementById('history-container').innerHTML = list.map(s => `
                     <div class="history-card">
-                        <div style="color:#4ade80; font-weight:bold; margin-bottom:8px;">${s.start}</div>
+                        <div style="color:#4ade80; font-weight:bold;">${s.start}</div>
                         <audio src="${s.audio}" controls></audio>
-                        <div style="font-size:12px; color:#cbd5e1; margin-top:8px;">${s.note || "Märkmed puuduvad"}</div>
+                        <div style="font-size:12px; color:#cbd5e1; margin-top:8px;">${s.note || ""}</div>
                     </div>`).join('');
             };
         }
