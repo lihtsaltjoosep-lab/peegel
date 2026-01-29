@@ -3,15 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#020617">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Peegel">
+    <meta name="mobile-web-app-capable" content="yes">
     
-    <link rel="manifest" href="manifest.json?display=standalone">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2645/2645897.png">
-
-    <title>Peegel v33.1</title>
+    <link rel="manifest" href='data:application/json,{"name":"Peegel","short_name":"Peegel","start_url":"index.html","display":"standalone","background_color":"#020617","theme_color":"#020617"}'>
+    
+    <title>Peegel v33.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; height: 100vh; overflow: hidden; }
@@ -30,8 +28,8 @@
         .light-on { background: #22c55e !important; box-shadow: 0 0 10px #22c55e; }
         audio { height: 32px; width: 100%; border-radius: 8px; filter: invert(1) brightness(0.8); margin-top: 5px; }
         
-        #history-container { -ms-overflow-style: none; scrollbar-width: none; overflow-y: auto; flex-grow: 1; }
         #history-container::-webkit-scrollbar { display: none; }
+        #history-container { -ms-overflow-style: none; scrollbar-width: none; overflow-y: auto; flex-grow: 1; }
     </style>
 </head>
 <body class="p-4 flex flex-col items-center">
@@ -41,9 +39,17 @@
     </div>
     
     <div class="w-full max-w-md space-y-3 text-center h-full flex flex-col">
-        <div class="flex justify-between items-center p-2 shrink-0">
+        <div class="flex justify-between items-baseline p-2 shrink-0">
             <h1 class="text-3xl font-black italic uppercase text-blue-500">Peegel</h1>
-            <div id="clock" class="text-xl font-light text-amber-600">00:00:00</div>
+            <div class="flex flex-col items-end">
+                <div id="clock" class="text-xl font-light text-amber-600 leading-none">00:00:00</div>
+                <div class="flex gap-2 items-center mt-1">
+                    <span class="text-[9px] text-slate-700 font-bold uppercase">v33.2</span>
+                    <div id="hz-display" class="text-[10px] font-mono font-bold hidden">
+                        <span class="text-red-600">HZ</span> <span id="hz-min" class="text-orange-500">-</span><span class="text-orange-500">/</span><span id="hz-max" class="text-orange-500">-</span>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div id="setup-screen" class="pt-16 pb-8 flex flex-col items-center shrink-0">
@@ -65,13 +71,10 @@
                 <div class="flex justify-between items-center border-b border-white/5 pb-2">
                     <div class="flex items-center gap-4">
                         <div id="status-light"></div>
-                        <div class="font-mono text-xs font-bold uppercase">
-                            <div class="text-green-400">Kõne: <span id="speech-timer">00:00</span></div>
-                            <div class="text-blue-400">Paus: <span id="silence-timer">00:00</span></div>
+                        <div class="font-mono text-xs font-bold uppercase flex gap-4">
+                            <div><span class="text-blue-900">Kõne:</span> <span id="speech-timer" class="text-cyan-400">00:00</span></div>
+                            <div><span class="text-blue-900">Paus:</span> <span id="silence-timer" class="text-cyan-400">00:00</span></div>
                         </div>
-                    </div>
-                    <div class="text-right">
-                        <div class="text-[10px] text-slate-500 font-bold uppercase text-amber-500 font-mono"><span id="hz-min">-</span> / <span id="hz-max">-</span> HZ</div>
                     </div>
                 </div>
                 <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-20 text-slate-200 placeholder-slate-600 resize-none" placeholder="Kirjuta märkmed siia..."></textarea>
@@ -87,10 +90,6 @@
     </div>
 
     <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').catch(() => {});
-        }
-
         let isLive = false, audioCtx, processor, stream, speechBuffer = []; 
         let sessionStart = null, speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0;
         const THRESHOLD = 0.008, PADDING_MS = 400; 
@@ -119,6 +118,8 @@
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
                 source.connect(analyser); analyser.connect(processor); processor.connect(audioCtx.destination);
                 sessionStart = new Date(); speechMs = 0; silenceMs = 0; speechBuffer = []; hzMin = 9999; hzMax = 0; isLive = true;
+                
+                document.getElementById('hz-display').classList.remove('hidden');
                 processor.onaudioprocess = (e) => {
                     if (!isLive) return;
                     const input = e.inputBuffer.getChannelData(0); analyser.getByteFrequencyData(dataArray);
@@ -130,7 +131,11 @@
                     if (rms > THRESHOLD) {
                         isSpeaking = true; silenceHoldFrames = Math.round(PADDING_MS / fMs); speechMs += fMs;
                         document.getElementById('status-light').classList.add('light-on');
-                        if(hz > 50) { if(hz < hzMin) hzMin = hz; if(hz > hzMax) hzMax = hz; document.getElementById('hz-min').innerText = hzMin; document.getElementById('hz-max').innerText = hzMax; }
+                        if(hz > 50) { 
+                            if(hz < hzMin) hzMin = hz; if(hz > hzMax) hzMax = hz; 
+                            document.getElementById('hz-min').innerText = hzMin; 
+                            document.getElementById('hz-max').innerText = hzMax; 
+                        }
                     } else {
                         if (silenceHoldFrames > 0) { silenceHoldFrames--; speechMs += fMs; } 
                         else { isSpeaking = false; silenceMs += fMs; document.getElementById('status-light').classList.remove('light-on'); }
@@ -141,7 +146,7 @@
                 };
                 document.getElementById('setup-screen').classList.add('hidden');
                 document.getElementById('active-session').classList.remove('hidden');
-            } catch (err) { alert("Viga!"); }
+            } catch (err) { alert("Miku viga!"); }
         }
 
         function fixNow() {
@@ -150,7 +155,7 @@
             const startT = sessionStart.toLocaleTimeString('et-EE'), endT = new Date().toLocaleTimeString('et-EE');
             const buf = [...speechBuffer], sM = speechMs, vM = silenceMs, hMi = hzMin, hMa = hzMax;
             speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0; sessionStart = new Date();
-            document.getElementById('note-input').value = ""; document.getElementById('hz-min').innerText = "-"; document.getElementById('hz-max').innerText = "-";
+            document.getElementById('note-input').value = "";
             const sr = audioCtx.sampleRate, length = buf.reduce((a, c) => a + c.length, 0);
             const wavBuffer = new ArrayBuffer(44 + length * 2); const view = new DataView(wavBuffer);
             const writeS = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
@@ -171,16 +176,20 @@
                 const list = e.target.result.sort((a,b) => b.id - a.id);
                 document.getElementById('history-container').innerHTML = list.map(s => `
                     <div class="glass rounded-[30px] p-5 mb-4 text-xs">
-                        <div class="flex justify-between font-bold mb-3 items-center"><span class="text-green-400 text-[14px]">${s.start} - ${s.end}</span><button onclick="delS(${s.id})" class="text-[10px] text-red-500 bg-red-900/20 px-3 py-1 rounded-full">KUSTUTA</button></div>
-                        <div class="text-[10px] text-slate-400 uppercase font-bold mb-2">Kõne: ${formatTime(s.stats.sMs)} | Vaikus: ${formatTime(s.stats.vMs)} | ${s.stats.hMin}-${s.stats.hMax}Hz</div>
+                        <div class="flex justify-between font-bold mb-3 items-center"><span class="text-green-400 text-[14px]">${s.start} - ${s.end}</span><button onclick="delS(${s.id})" class="text-[10px] text-red-500 bg-red-900/20 px-3 py-1 rounded-full uppercase">Kustuta</button></div>
+                        <div class="font-mono text-[10px] uppercase font-bold mb-2 flex gap-3">
+                            <div><span class="text-blue-900">Kõne:</span> <span class="text-cyan-400">${formatTime(s.stats.sMs)}</span></div>
+                            <div><span class="text-blue-900">Paus:</span> <span class="text-cyan-400">${formatTime(s.stats.vMs)}</span></div>
+                            <div><span class="text-red-600">HZ:</span> <span class="text-orange-500">${s.stats.hMin}-${s.stats.hMax}</span></div>
+                        </div>
                         <audio src="${s.audio}" controls class="w-full h-8 opacity-90"></audio>
-                        <div class="mt-2 text-right"><a href="${s.audio}" download="Peegel_${s.id}.wav" class="text-blue-400 underline mr-4 uppercase font-bold text-[10px]">WAV</a><button onclick="downloadHTML(${s.id})" class="text-amber-400 underline uppercase font-bold text-[10px]">HTML</button></div>
+                        <div class="mt-2 text-right"><button onclick="downloadHTML(${s.id})" class="text-amber-400 underline uppercase font-bold text-[10px]">HTML</button></div>
                         ${s.note ? `<details class="mt-2"><summary class="text-slate-500 cursor-pointer">Märkmed</summary><div class="p-3 bg-black/40 text-[11px] mt-2 rounded-xl text-slate-300 italic whitespace-pre-wrap">${s.note}</div></details>` : ''}
                     </div>`).join('');
             };
         }
 
-        function formatTime(ms) { const s = Math.floor(ms / 1000); return `${Math.floor(s/60)}m ${s%60}s`; }
+        function formatTime(ms) { const s = Math.round(ms / 1000); return `${Math.floor(s/60)}m ${s%60}s`; }
         function stopSession() { isLive = false; setTimeout(() => location.reload(), 500); }
         window.delS = id => { if(confirm("Kustuta?")) { const tx = db.transaction("sessions", "readwrite"); tx.objectStore("sessions").delete(id).onsuccess = renderHistory; } };
         window.downloadHTML = id => {
