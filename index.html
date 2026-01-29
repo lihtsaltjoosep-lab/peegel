@@ -8,8 +8,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#020617">
+    <meta name="display" content="standalone">
 
-    <link rel="manifest" href="manifest.json?v=35.4">
+    <link rel="manifest" href="manifest.json?v=35.5">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2645/2645897.png">
 
     <title>Peegel</title>
@@ -20,7 +21,7 @@
         
         html, body { 
             background-color: var(--bg); 
-            overscroll-behavior-y: none; 
+            overscroll-behavior: none; 
             margin: 0; 
             height: 100%; 
             width: 100%;
@@ -44,18 +45,16 @@
         #status-light { width: 10px; height: 10px; border-radius: 50%; background: #1e293b; }
         .light-on { background: #10b981 !important; box-shadow: 0 0 15px #10b981; }
         audio { height: 30px; width: 100%; filter: invert(0.9) hue-rotate(180deg); margin-top: 8px; opacity: 0.7; }
-        summary { list-style: none; outline: none; }
-        summary::-webkit-details-marker { display: none; }
     </style>
 </head>
-<body>
-    <div id="blackout-overlay"><div onclick="requestUnlock()" class="unlock-trigger"></div></div>
+<body onclick="hideNav()"> <div id="blackout-overlay"><div onclick="requestUnlock()" class="unlock-trigger"></div></div>
     
     <div id="main-scroller">
-        <div class="w-full max-w-md mx-auto flex flex-col min-h-[101vh] pb-10"> <header class="flex justify-between items-baseline mb-6 pt-4">
+        <div class="w-full max-w-md mx-auto flex flex-col min-h-screen pb-10">
+            <header class="flex justify-between items-baseline mb-6 pt-4">
                 <div>
                     <h1 class="text-xl font-black italic tracking-tighter uppercase text-blue-500 leading-none">Peegel</h1>
-                    <p class="text-[7px] tracking-[0.3em] text-slate-700 font-bold mt-1 ml-0.5 uppercase">v35.4</p>
+                    <p class="text-[7px] tracking-[0.3em] text-slate-700 font-bold mt-1 ml-0.5 uppercase">v35.5</p>
                 </div>
                 <div id="clock" class="text-2xl font-[100] text-amber-500/60 font-mono tracking-tighter text-right leading-none">00:00:00</div>
             </header>
@@ -96,7 +95,20 @@
     </div>
 
     <script>
-        if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').then(reg => reg.update()).catch(() => {}); }
+        // SERVICE WORKER - KRIITILINE
+        if ('serviceWorker' in navigator) { 
+            navigator.serviceWorker.register('sw.js?v=35.5')
+            .then(reg => { reg.update(); console.log("SW aktiivne"); });
+        }
+
+        // Naviriba peitmise funktsioon
+        function hideNav() {
+            window.scrollTo(0, 1);
+            if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
+                // Me ei sunni fullscreeni vägisi (et vältida Chrome'i erroreid), 
+                // aga kerime lehte, et naviriba peituks.
+            }
+        }
         
         let wakeLock = null;
         async function requestWakeLock() {
@@ -109,7 +121,7 @@
 
         function toggleBlackout(show) { 
             document.getElementById('blackout-overlay').style.display = show ? 'block' : 'none';
-            if(show) requestWakeLock();
+            if(show) { requestWakeLock(); hideNav(); }
         }
         function requestUnlock() { if (prompt("Kood:") === "5") toggleBlackout(false); }
 
@@ -119,14 +131,12 @@
 
         setInterval(() => { 
             document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE');
-            // FIX: Sundkerimine peidab paljudel mudelitel naviriba
-            if(isLive) window.scrollTo(0, 1);
         }, 1000);
 
         async function startSession() {
             try {
                 requestWakeLock();
-                window.scrollTo(0, 1);
+                hideNav();
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioCtx.createMediaStreamSource(stream);
@@ -190,12 +200,9 @@
                 const list = e.target.result.sort((a,b) => b.id - a.id);
                 document.getElementById('history-container').innerHTML = list.map(s => `
                     <div class="glass-card rounded-[32px] p-5 mb-4 text-xs">
-                        <div class="flex justify-between items-center mb-4">
-                            <span class="text-emerald-400 font-[100] text-[15px] tracking-tight">${s.start} <span class="text-slate-800 mx-1">/</span> ${s.end}</span>
-                            <div class="flex items-center gap-3">
-                                <span class="text-[10px] font-mono font-light"><span class="text-red-600 font-bold">HZ</span> <span class="text-orange-500 font-bold">${s.stats.hMin}-${s.stats.hMax}</span></span>
-                                <button onclick="delS(${s.id})" class="text-[9px] text-red-400/40 uppercase">Kustuta</button>
-                            </div>
+                        <div class="flex justify-between items-center mb-4 text-blue-400 font-black tracking-tight text-[14px]">
+                            ${s.start} - ${s.end}
+                            <button onclick="delS(${s.id})" class="text-[9px] text-red-400/40 uppercase font-light">Kustuta</button>
                         </div>
                         <div class="flex flex-wrap gap-4 mb-4 font-mono text-[10px] uppercase font-light text-blue-500">Paus: <span class="text-blue-300 font-bold">${formatTime(s.stats.vMs)}</span></div>
                         <audio src="${s.audio}" controls></audio>
