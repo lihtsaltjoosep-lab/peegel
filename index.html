@@ -12,7 +12,7 @@
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2645/2645897.png">
 
-    <title>Peegel v34.5</title>
+    <title>Peegel v34.6</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;900&display=swap');
@@ -35,7 +35,7 @@
         
         audio { height: 30px; width: 100%; filter: invert(0.9) hue-rotate(180deg); margin-top: 8px; opacity: 0.7; }
         
-        textarea::placeholder { color: #475569; font-weight: 200; }
+        textarea::placeholder { color: #475569; font-weight: 100; }
         summary { list-style: none; outline: none; }
         summary::-webkit-details-marker { display: none; }
     </style>
@@ -47,10 +47,10 @@
     <div class="w-full max-w-md mx-auto flex flex-col min-h-screen">
         <header class="flex justify-between items-baseline mb-6">
             <div>
-                <h1 class="text-2xl font-black italic tracking-tighter uppercase text-blue-600 leading-none">Peegel</h1>
-                <p class="text-[8px] tracking-[0.3em] text-slate-600 font-bold mt-0.5 ml-0.5">FIX2 v34.5</p>
+                <h1 class="text-xl font-black italic tracking-tighter uppercase text-blue-600 leading-none">Peegel</h1>
+                <p class="text-[7px] tracking-[0.3em] text-slate-700 font-bold mt-0.5 ml-0.5 uppercase">v34.6</p>
             </div>
-            <div id="clock" class="text-2xl font-[100] text-amber-500/70 font-mono tracking-tighter text-right leading-none">00:00:00</div>
+            <div id="clock" class="text-2xl font-[100] text-amber-500/60 font-mono tracking-tighter text-right leading-none">00:00:00</div>
         </header>
 
         <div id="setup-screen" class="py-16 flex flex-col items-center justify-center">
@@ -62,22 +62,22 @@
 
         <div id="active-session" class="hidden space-y-4">
             <div class="flex justify-end">
-                <button onclick="toggleBlackout(true)" class="text-[10px] font-medium text-slate-500 uppercase px-4 py-2 rounded-full border border-white/10 glass-card">Pimenda</button>
+                <button onclick="toggleBlackout(true)" class="text-[10px] font-light text-slate-500 uppercase px-4 py-2 rounded-full border border-white/10 glass-card">Pimenda</button>
             </div>
             <div class="glass-card rounded-[40px] p-6 space-y-4">
                 <div class="flex justify-between items-center border-b border-white/5 pb-4">
                     <div class="flex items-center gap-4">
                         <div id="status-light"></div>
-                        <div class="font-mono text-[11px] font-light uppercase flex gap-4">
-                            <div class="text-green-400">Kõne <span id="speech-timer" class="text-emerald-300 ml-1 font-bold">00:00</span></div>
-                            <div class="text-blue-500">Paus <span id="silence-timer" class="text-blue-300 ml-1 font-bold">00:00</span></div>
+                        <div class="font-mono text-[11px] font-[100] uppercase flex gap-4">
+                            <div class="text-green-400">Kõne <span id="speech-timer" class="text-emerald-300 ml-1 font-black">00:00</span></div>
+                            <div class="text-blue-500">Paus <span id="silence-timer" class="text-blue-300 ml-1 font-black">00:00</span></div>
                         </div>
                     </div>
                     <div id="hz-indicator" class="text-[10px] font-mono font-light bg-red-950/30 px-3 py-1 rounded-full border border-red-900/20">
                         <span class="text-red-600 mr-1">HZ</span> <span id="hz-min" class="text-orange-500 font-bold">-</span><span class="text-orange-900 mx-0.5">/</span><span id="hz-max" class="text-orange-500 font-bold">-</span>
                     </div>
                 </div>
-                <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 resize-none leading-relaxed font-[200]" placeholder="Kirjuta siia..."></textarea>
+                <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 resize-none leading-relaxed font-[100]" placeholder="Kirjuta siia..."></textarea>
             </div>
             <div class="grid grid-cols-2 gap-4 pt-2">
                 <button onclick="fixNow()" class="bg-blue-600 text-white py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest shadow-lg active:scale-95 transition-transform">Fikseeri</button>
@@ -89,14 +89,11 @@
     </div>
 
     <script>
-        // SERVICE WORKER KONTROLL JA REGISTREERIMINE (Naviriba Fix)
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js').then(reg => {
-                    console.log('SW registreeritud!');
-                    // Sunnime kohese uuenduse, et naviriba kaoks
                     reg.update();
-                }).catch(err => console.log('SW viga:', err));
+                }).catch(() => {});
             });
         }
 
@@ -176,10 +173,10 @@
                 document.getElementById('history-container').innerHTML = list.map(s => `
                     <div class="glass-card rounded-[32px] p-5 mb-4 text-xs">
                         <div class="flex justify-between items-center mb-4">
-                            <span class="text-emerald-400 font-[200] text-[15px] tracking-tight">${s.start} <span class="text-slate-700 mx-1">/</span> ${s.end}</span>
+                            <span class="text-emerald-400 font-[100] text-[15px] tracking-tight">${s.start} <span class="text-slate-800 mx-1">/</span> ${s.end}</span>
                             <div class="flex items-center gap-3">
                                 <span class="text-[10px] font-mono font-light"><span class="text-red-600">HZ:</span> <span class="text-orange-500 font-bold">${s.stats.hMin}-${s.stats.hMax}</span></span>
-                                <button onclick="delS(${s.id})" class="text-[9px] text-red-400/60 uppercase">Kustuta</button>
+                                <button onclick="delS(${s.id})" class="text-[9px] text-red-400/40 uppercase">Kustuta</button>
                             </div>
                         </div>
                         <div class="flex flex-wrap gap-4 mb-4 font-mono text-[10px] uppercase font-light">
@@ -188,7 +185,7 @@
                         </div>
                         <audio src="${s.audio}" controls></audio>
                         <div class="flex justify-between items-center mt-4">
-                            ${s.note ? `<details class="flex-grow"><summary class="text-slate-500 cursor-pointer text-[10px] uppercase font-bold">Märkmed</summary><div class="text-slate-400 italic mt-2 text-[11px] leading-relaxed whitespace-pre-wrap border-t border-white/5 pt-2 font-[200]">${s.note}</div></details>` : '<div></div>'}
+                            ${s.note ? `<details class="flex-grow"><summary class="text-slate-500 cursor-pointer text-[10px] uppercase font-bold">Märkmed</summary><div class="text-slate-400 italic mt-2 text-[11px] leading-relaxed whitespace-pre-wrap border-t border-white/5 pt-2 font-[100]">${s.note}</div></details>` : '<div></div>'}
                             <button onclick="downloadHTML(${s.id})" class="text-amber-500/80 text-[10px] uppercase font-black tracking-widest border-b border-amber-500/20 pb-0.5 ml-4 shrink-0">HTML</button>
                         </div>
                     </div>`).join('');
