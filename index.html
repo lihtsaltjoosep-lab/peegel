@@ -3,16 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#020617">
-    
-    <link rel="manifest" href="manifest.json?v=34.7">
+    <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2645/2645897.png">
 
-    <title>Peegel v34.7</title>
+    <title>Peegel v34.8</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;900&display=swap');
@@ -39,7 +37,7 @@
         <header class="flex justify-between items-baseline mb-6">
             <div>
                 <h1 class="text-xl font-black italic tracking-tighter uppercase text-blue-600 leading-none">Peegel</h1>
-                <p class="text-[7px] tracking-[0.3em] text-slate-700 font-bold mt-0.5 ml-0.5 uppercase">v34.7</p>
+                <p class="text-[7px] tracking-[0.3em] text-slate-700 font-bold mt-0.5 ml-0.5 uppercase">v34.8</p>
             </div>
             <div id="clock" class="text-2xl font-[100] text-amber-500/60 font-mono tracking-tighter text-right leading-none">00:00:00</div>
         </header>
@@ -79,16 +77,20 @@
     </div>
 
     <script>
-        if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').then(reg => reg.update()).catch(() => {}); }); }
+        if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); }); }
         let isLive = false, audioCtx, processor, stream, speechBuffer = [], sessionStart = null, speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0;
         const THRESHOLD = 0.008, PADDING_MS = 400; 
         let isSpeaking = false, silenceHoldFrames = 0;
+
         function toggleBlackout(show) { document.getElementById('blackout-overlay').style.display = show ? 'block' : 'none'; }
         function requestUnlock() { if (prompt("Kood:") === "5") toggleBlackout(false); }
+
         let db; const dbReq = indexedDB.open("Peegel_Database", 1);
         dbReq.onupgradeneeded = e => { db = e.target.result; if (!db.objectStoreNames.contains("sessions")) db.createObjectStore("sessions", { keyPath: "id" }); };
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
+
         setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }, 1000);
+
         async function startSession() {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -107,6 +109,7 @@
                     let sum = 0; for(let i=0; i<input.length; i++) sum += input[i]*input[i];
                     const rms = Math.sqrt(sum/input.length);
                     const fMs = (4096 / audioCtx.sampleRate) * 1000;
+
                     if (rms > THRESHOLD) {
                         isSpeaking = true; silenceHoldFrames = Math.round(PADDING_MS / fMs); speechMs += fMs;
                         document.getElementById('status-light').classList.add('light-on');
@@ -118,18 +121,22 @@
                     if (isSpeaking || silenceHoldFrames > 0) speechBuffer.push(new Float32Array(input));
                     document.getElementById('speech-timer').innerText = formatTime(speechMs);
                     document.getElementById('silence-timer').innerText = formatTime(silenceMs);
+
+                    // AUTOSAVE: Kui 10 min (600,000 ms) kõnet täitub, salvesta kohe
+                    if (speechMs >= 600000) { fixNow(); }
                 };
                 document.getElementById('setup-screen').classList.add('hidden');
                 document.getElementById('active-session').classList.remove('hidden');
             } catch (err) { alert("Viga!"); }
         }
+
         function fixNow() {
             if (speechBuffer.length === 0) return;
             const noteText = document.getElementById('note-input').value;
             const startT = sessionStart.toLocaleTimeString('et-EE'), endT = new Date().toLocaleTimeString('et-EE');
             const buf = [...speechBuffer], sM = speechMs, vM = silenceMs, hMi = hzMin, hMa = hzMax;
             speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0; sessionStart = new Date();
-            document.getElementById('note-input').value = "";
+            document.getElementById('note-input').value = ""; document.getElementById('hz-min').innerText = "-"; document.getElementById('hz-max').innerText = "-";
             const sr = audioCtx.sampleRate, length = buf.reduce((a, c) => a + c.length, 0);
             const wavBuffer = new ArrayBuffer(44 + length * 2); const view = new DataView(wavBuffer);
             const writeS = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
@@ -142,6 +149,7 @@
                 tx.oncomplete = renderHistory;
             };
         }
+
         function renderHistory() {
             if(!db) return;
             const tx = db.transaction("sessions", "readonly");
@@ -150,16 +158,19 @@
                 document.getElementById('history-container').innerHTML = list.map(s => `
                     <div class="glass-card rounded-[32px] p-5 mb-4 text-xs">
                         <div class="flex justify-between items-center mb-4">
-                            <span class="text-emerald-400 font-[100] text-[15px] tracking-tight">${s.start} <span class="text-slate-800 mx-1">/</span> ${s.end}</span>
+                            <span class="text-emerald-400 font-[200] text-[15px] tracking-tight">${s.start} <span class="text-slate-800 mx-1">/</span> ${s.end}</span>
                             <div class="flex items-center gap-3">
-                                <span class="text-[10px] font-mono font-light"><span class="text-red-600">HZ:</span> <span class="text-orange-500 font-bold">${s.stats.hMin}-${s.stats.hMax}</span></span>
+                                <span class="text-[10px] font-mono font-light"><span class="text-red-600 font-bold">HZ</span> <span class="text-orange-500 font-bold">${s.stats.hMin}-${s.stats.hMax}</span></span>
                                 <button onclick="delS(${s.id})" class="text-[9px] text-red-400/40 uppercase">Kustuta</button>
                             </div>
                         </div>
-                        <div class="flex flex-wrap gap-4 mb-4 font-mono text-[10px] uppercase font-light text-blue-500">Paus: <span class="text-blue-300 font-bold">${formatTime(s.stats.vMs)}</span></div>
+                        <div class="flex flex-wrap gap-4 mb-4 font-mono text-[10px] uppercase font-light">
+                            <div class="text-green-400">Kõne: <span class="text-emerald-300 font-bold">${formatTime(s.stats.sMs)}</span></div>
+                            <div class="text-blue-500">Paus: <span class="text-blue-300 font-bold">${formatTime(s.stats.vMs)}</span></div>
+                        </div>
                         <audio src="${s.audio}" controls></audio>
                         <div class="flex justify-between items-center mt-4">
-                            ${s.note ? `<details class="flex-grow"><summary class="text-slate-500 cursor-pointer text-[10px] uppercase font-bold">Märkmed</summary><div class="text-slate-400 italic mt-2 text-[11px] leading-relaxed border-t border-white/5 pt-2 font-[100]">${s.note}</div></details>` : '<div></div>'}
+                            ${s.note ? `<details class="flex-grow"><summary class="text-slate-500 cursor-pointer text-[10px] uppercase font-bold">Märkmed</summary><div class="text-slate-400 italic mt-2 text-[11px] leading-relaxed whitespace-pre-wrap border-t border-white/5 pt-2 font-[200]">${s.note}</div></details>` : '<div></div>'}
                             <button onclick="downloadHTML(${s.id})" class="text-amber-500/80 text-[10px] uppercase font-black tracking-widest border-b border-amber-500/20 pb-0.5 ml-4 shrink-0">HTML</button>
                         </div>
                     </div>`).join('');
