@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <link rel="manifest" href="manifest.json">
-    <title>Peegel v32.8.4</title>
+    <title>Peegel v32.8.5</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; height: 100vh; }
@@ -18,7 +18,6 @@
         .play-ring { width: 150px; height: 150px; border-radius: 50%; background: #1d4ed8; border: 5px solid #f4ead5; box-shadow: 0 0 30px rgba(244, 234, 213, 0.3); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
         #status-light { width: 14px; height: 14px; border-radius: 50%; background: #334155; transition: 0.05s; }
         .light-on { background: #22c55e !important; box-shadow: 0 0 15px #22c55e; }
-        .nav-bar { position: fixed; bottom: 0; left: 0; width: 100%; height: 70px; background: rgba(15, 23, 42, 0.95); border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-around; align-items: center; padding-bottom: env(safe-area-inset-bottom); z-index: 50; }
         audio { height: 35px; width: 100%; border-radius: 8px; filter: invert(1) brightness(0.8); margin-top: 5px; }
     </style>
 </head>
@@ -30,7 +29,7 @@
         </div>
     </div>
     
-    <div class="w-full max-w-md space-y-4 text-center">
+    <div class="w-full max-w-md space-y-4 text-center pb-20">
         <div class="flex justify-between items-center p-2">
             <h1 class="text-3xl font-black italic uppercase text-blue-500">Peegel</h1>
             <div id="clock" class="text-xl font-light text-amber-600">00:00:00</div>
@@ -54,7 +53,7 @@
                         <div id="status-light"></div>
                         <div class="font-mono text-xs font-bold uppercase">
                             <div class="text-green-400">Kõne: <span id="speech-timer">00:00</span></div>
-                            <div class="text-blue-400">Vaikus: <span id="silence-timer">00:00</span></div>
+                            <div class="text-blue-400">Paus: <span id="silence-timer">00:00</span></div>
                         </div>
                     </div>
                     <div class="text-right">
@@ -63,7 +62,7 @@
                     </div>
                 </div>
                 <div class="pt-2 border-t border-white/5">
-                    <textarea id="note-input" class="w-full bg-black/40 rounded-xl p-3 text-sm focus:outline-none h-24 text-slate-200 placeholder-slate-700 resize-none border border-white/5" placeholder="Kirjuta märkmed siia..."></textarea>
+                    <textarea id="note-input" class="w-full bg-transparent rounded-xl p-3 text-sm focus:outline-none h-24 text-slate-200 placeholder-slate-700 resize-none" placeholder="Kirjuta märkmed siia..."></textarea>
                 </div>
             </div>
 
@@ -74,17 +73,6 @@
         </div>
 
         <div id="history-container" class="space-y-4 text-left w-full mt-6 pb-24"></div>
-    </div>
-
-    <div class="nav-bar">
-        <div class="text-blue-500 flex flex-col items-center cursor-pointer" onclick="location.reload()">
-            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-            <span class="text-[9px] uppercase font-bold mt-1">Sessioon</span>
-        </div>
-        <div class="text-slate-500 flex flex-col items-center opacity-50">
-            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
-            <span class="text-[9px] uppercase font-bold mt-1">Ajalugu</span>
-        </div>
     </div>
 
     <script>
@@ -169,18 +157,33 @@
                 const list = e.target.result.sort((a,b) => b.id - a.id);
                 document.getElementById('history-container').innerHTML = list.map(s => `
                     <div class="glass rounded-[30px] p-5 mb-4 text-xs border border-white/5">
-                        <div class="flex justify-between font-bold mb-2">
+                        <div class="flex justify-between items-center font-bold mb-3">
                             <span class="text-green-400 text-[14px]">${s.start} - ${s.end}</span>
-                            <button onclick="delS(${s.id})" class="text-red-500 opacity-50 uppercase text-[10px]">Kustuta</button>
+                            <div class="flex items-center gap-3">
+                                <span class="text-[10px] uppercase font-bold tracking-tighter">
+                                    <span class="text-red-600">HZ:</span> 
+                                    <span class="text-orange-500 ml-1">${s.stats.hMin}-${s.stats.hMax}</span>
+                                </span>
+                                <button onclick="delS(${s.id})" class="text-red-500 opacity-50 uppercase text-[10px]">Kustuta</button>
+                            </div>
                         </div>
-                        <div class="text-slate-400 text-[10px] uppercase font-bold mb-2">Kõne: ${formatTime(s.stats.sMs)} | HZ: ${s.stats.hMin}-${s.stats.hMax}</div>
+                        
+                        <div class="text-[10px] uppercase font-bold mb-3 flex gap-4">
+                            <span><span class="text-blue-900">Kõne:</span> <span class="text-slate-200 ml-1">${formatTime(s.stats.sMs)}</span></span>
+                            <span><span class="text-blue-900">Vaikus:</span> <span class="text-slate-200 ml-1">${formatTime(s.stats.vMs)}</span></span>
+                        </div>
+
                         <audio src="${s.audio}" controls class="mb-2"></audio>
+                        
                         ${s.note ? `
                         <details class="mt-3">
                             <summary class="text-slate-400 cursor-pointer font-bold uppercase text-[10px] tracking-wider">Vaata märkmeid</summary>
-                            <div class="text-slate-300 italic mt-2 p-3 bg-black/30 rounded-xl border-l-2 border-blue-500">${s.note}</div>
+                            <div class="text-slate-300 italic mt-2 p-3 bg-black/30 rounded-xl border-l-2 border-blue-500 whitespace-pre-wrap">${s.note}</div>
                         </details>` : ''}
-                        <div class="flex justify-end mt-3"><button onclick="downloadHTML(${s.id})" class="text-amber-500 font-bold text-[10px] uppercase tracking-wider">Laadi HTML</button></div>
+                        
+                        <div class="flex justify-end mt-3">
+                            <button onclick="downloadHTML(${s.id})" class="text-amber-500 font-bold text-[10px] uppercase tracking-wider">Laadi HTML</button>
+                        </div>
                     </div>`).join('');
             };
         }
