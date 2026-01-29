@@ -9,7 +9,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#020617">
 
-    <link rel="manifest" href="manifest.json?v=35.3">
+    <link rel="manifest" href="manifest.json?v=35.4">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2645/2645897.png">
 
     <title>Peegel</title>
@@ -52,9 +52,11 @@
     <div id="blackout-overlay"><div onclick="requestUnlock()" class="unlock-trigger"></div></div>
     
     <div id="main-scroller">
-        <div class="w-full max-w-md mx-auto flex flex-col min-h-screen pb-10">
-            <header class="flex justify-between items-baseline mb-6 pt-4">
-                <h1 class="text-xl font-black italic tracking-tighter uppercase text-blue-500 leading-none">Peegel</h1>
+        <div class="w-full max-w-md mx-auto flex flex-col min-h-[101vh] pb-10"> <header class="flex justify-between items-baseline mb-6 pt-4">
+                <div>
+                    <h1 class="text-xl font-black italic tracking-tighter uppercase text-blue-500 leading-none">Peegel</h1>
+                    <p class="text-[7px] tracking-[0.3em] text-slate-700 font-bold mt-1 ml-0.5 uppercase">v35.4</p>
+                </div>
                 <div id="clock" class="text-2xl font-[100] text-amber-500/60 font-mono tracking-tighter text-right leading-none">00:00:00</div>
             </header>
 
@@ -74,8 +76,8 @@
                         <div class="flex items-center gap-4">
                             <div id="status-light"></div>
                             <div class="font-mono text-[11px] font-[100] uppercase flex gap-4">
-                                <div class="text-green-400">Kõne <span id="speech-timer" class="text-emerald-300 font-black">00:00</span></div>
-                                <div class="text-blue-500">Paus <span id="silence-timer" class="text-blue-300 font-black">00:00</span></div>
+                                <div class="text-green-400 font-black">Kõne <span id="speech-timer">00:00</span></div>
+                                <div class="text-blue-500 font-black">Paus <span id="silence-timer" class="text-blue-300">00:00</span></div>
                             </div>
                         </div>
                         <div class="text-[10px] font-mono font-light bg-red-950/30 px-3 py-1 rounded-full border border-red-900/20">
@@ -98,9 +100,7 @@
         
         let wakeLock = null;
         async function requestWakeLock() {
-            try {
-                if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); }
-            } catch (err) {}
+            try { if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); } } catch (err) {}
         }
 
         let isLive = false, audioCtx, processor, stream, speechBuffer = [], sessionStart = null, speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0;
@@ -119,14 +119,14 @@
 
         setInterval(() => { 
             document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE');
+            // FIX: Sundkerimine peidab paljudel mudelitel naviriba
+            if(isLive) window.scrollTo(0, 1);
         }, 1000);
 
         async function startSession() {
             try {
                 requestWakeLock();
-                // Sunnime naviriba peitu kerimise kaudu
-                setTimeout(() => window.scrollTo(0, 1), 100);
-                
+                window.scrollTo(0, 1);
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioCtx.createMediaStreamSource(stream);
