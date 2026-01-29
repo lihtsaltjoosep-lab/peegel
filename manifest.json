@@ -1,11 +1,8 @@
 {
-  "id": "/peegel-app/",
-  "scope": "/",
-  "start_url": "/index.html",
   "name": "Peegel",
   "short_name": "Peegel",
+  "start_url": "index.html",
   "display": "standalone",
-  "display_override": ["fullscreen", "minimal-ui"],
   "background_color": "#020617",
   "theme_color": "#020617",
   "icons": [
