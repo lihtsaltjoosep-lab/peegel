@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <link rel="manifest" href="manifest.json">
-    <title>Peegel v32.4</title>
+    <title>Peegel v32.5</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; height: 100vh; }
@@ -20,9 +20,9 @@
         }
 
         .unlock-btn {
-            position: absolute; bottom: 20px; left: 20px;
-            width: 40px; height: 40px; border-radius: 50%;
-            background: rgba(30, 41, 59, 0.3); border: 1px solid rgba(255,255,255,0.05);
+            position: absolute; bottom: 40px; left: 40px;
+            width: 80px; height: 80px; border-radius: 50%;
+            background: rgba(255, 255, 255, 0.01); border: 1px solid rgba(255,255,255,0.03);
             display: flex; align-items: center; justify-content: center;
             cursor: pointer;
         }
@@ -34,7 +34,6 @@
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             cursor: pointer; transition: transform 0.2s;
         }
-        .play-ring:active { transform: scale(0.95); }
         .play-icon-svg { width: 50px; height: 50px; fill: #f4ead5; margin-left: 8px; margin-bottom: 5px; }
         .play-text { color: #f4ead5; font-weight: 900; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; }
 
@@ -46,8 +45,8 @@
 <body class="p-4 flex flex-col items-center">
 
     <div id="blackout-overlay">
-        <div onclick="toggleBlackout()" class="unlock-btn">
-            <svg class="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div onclick="requestUnlock()" class="unlock-btn">
+            <svg class="w-6 h-6 text-white opacity-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
         </div>
@@ -84,12 +83,12 @@
                         </div>
                     </div>
                 </div>
-                <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 placeholder-slate-600 resize-none" placeholder="Kirjuta märkmed siia..."></textarea>
+                <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 placeholder-slate-600 resize-none" placeholder="Märkmed siia..."></textarea>
             </div>
 
             <div class="grid grid-cols-2 gap-3">
-                <button onclick="fixNow()" class="bg-blue-600 text-white py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95 shadow-lg">Fikseeri</button>
-                <button onclick="stopSession()" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95">Lõpeta</button>
+                <button onclick="fixNow()" class="bg-blue-600 text-white py-5 rounded-[25px] font-bold uppercase text-xs shadow-lg">Fikseeri</button>
+                <button onclick="stopSession()" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-bold uppercase text-xs">Lõpeta</button>
             </div>
         </div>
 
@@ -97,13 +96,19 @@
     </div>
 
     <script>
-        let isLive = false, wakeLock = null;
-        let audioCtx, processor, stream, speechBuffer = []; 
+        let isLive = false, wakeLock = null, audioCtx, processor, stream, speechBuffer = []; 
         let sessionStart = null, speechMs = 0, silenceMs = 0;
+        const APP_PIN = "5";
 
-        function toggleBlackout() {
-            const overlay = document.getElementById('blackout-overlay');
-            overlay.style.display = (overlay.style.display === 'block') ? 'none' : 'block';
+        function toggleBlackout() { document.getElementById('blackout-overlay').style.display = 'block'; }
+        
+        function requestUnlock() {
+            const pin = prompt("Sisesta kood:");
+            if (pin === APP_PIN) {
+                document.getElementById('blackout-overlay').style.display = 'none';
+            } else if (pin !== null) {
+                alert("Vale kood!");
+            }
         }
 
         let db;
@@ -129,6 +134,7 @@
                     let sum = 0;
                     for(let i=0; i<input.length; i++) sum += input[i]*input[i];
                     const rms = Math.sqrt(sum/input.length);
+                    
                     if (rms > 0.008) {
                         speechMs += (4096 / audioCtx.sampleRate) * 1000;
                         speechBuffer.push(new Float32Array(input));
