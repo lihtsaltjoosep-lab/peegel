@@ -1,7 +1,7 @@
 {
-  "name": "MIR-2",
-  "short_name": "MIR-2",
-  "start_url": "index.html?refresh=1",
+  "name": "Peegel",
+  "short_name": "Peegel",
+  "start_url": "index.html",
   "display": "standalone",
   "background_color": "#020617",
   "theme_color": "#020617"
