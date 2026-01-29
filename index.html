@@ -6,13 +6,13 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Peegel v32.9.26</title>
+    <title>Peegel v32.9.27</title>
     <style>
         :root { --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         html { background-color: #020617; overflow: hidden; height: 100%; }
         body { 
-            background-color: #020617; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background-color: #020617; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
             margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; position: fixed; 
         }
         .main-scroll { height: 100vh; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px; padding-top: calc(20px + var(--sat)); padding-bottom: 120px; }
@@ -20,7 +20,9 @@
         
         .header { display: flex; justify-content: space-between; align-items: center; padding: 8px; }
         .logo { font-size: 30px; font-weight: 900; font-style: italic; text-transform: uppercase; color: #3b82f6; margin: 0; }
-        .clock { font-size: 20px; font-weight: 300; color: #d97706; }
+        
+        /* KELLA STIIL - Töötab ilma netita */
+        .clock { font-size: 20px; font-weight: 300; color: #d97706; font-variant-numeric: tabular-nums; }
         
         .play-ring { 
             width: 150px; height: 150px; border-radius: 50%; background: #1d4ed8; border: 5px solid #f4ead5; 
@@ -50,8 +52,7 @@
         
         .btn-grid { display: grid; grid-template-cols: 1fr 1fr; gap: 12px; }
         .btn { border: none; border-radius: 25px; padding: 20px; font-weight: bold; text-transform: uppercase; font-size: 12px; cursor: pointer; transition: transform 0.1s; }
-        .btn:active { transform: scale(0.95); }
-        .btn-blue { background: #2563eb; color: white; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .btn-blue { background: #2563eb; color: white; }
         .btn-red { background: rgba(127, 29, 29, 0.4); color: #ef4444; }
         .btn-dim { background: rgba(30, 41, 59, 0.3); color: #64748b; border: 1px solid rgba(255,255,255,0.05); padding: 4px 12px; border-radius: 9999px; font-size: 10px; width: fit-content; margin-left: auto; }
 
@@ -60,10 +61,9 @@
         .hidden { display: none !important; }
         #blackout-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; }
         .unlock-btn { position: absolute; bottom: 40px; left: 40px; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-        .version-tag { margin-top: 48px; color: #475569; font-size: 10px; text-transform: uppercase; letter-spacing: 0.3em; }
     </style>
 </head>
-<body>
+<body onclick="window.scrollTo(0, 1);">
     <div id="blackout-overlay"><div onclick="requestUnlock()" class="unlock-btn"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.02)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></div></div>
 
     <div class="main-scroll">
@@ -78,7 +78,7 @@
                     <svg viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z"></path></svg>
                     <div class="play-text">Alusta</div>
                 </div>
-                <p class="version-tag">v32.9.26 • Total Offline</p>
+                <p style="margin-top:48px; color:#475569; font-size:10px; text-transform:uppercase; letter-spacing:0.3em;">v32.9.27 • Offline Clock</p>
             </div>
 
             <div id="active-session" class="hidden">
@@ -116,7 +116,6 @@
         let isSpeaking = false, silenceHoldFrames = 0, db;
         const APP_PIN = "5";
 
-        // Andmebaasi avamine
         const dbReq = indexedDB.open("Peegel_Database_Final", 1);
         dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
@@ -128,7 +127,16 @@
             else if (enteredPin !== null) { alert("Vale!"); }
         }
 
-        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }, 1000);
+        // KELLA UUENDAMINE - Kasutab telefoni süsteemi aega
+        function updateClock() {
+            const now = new Date();
+            const h = String(now.getHours()).padStart(2, '0');
+            const m = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            document.getElementById('clock').innerText = `${h}:${m}:${s}`;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
 
         async function startSession() {
             try {
@@ -140,10 +148,8 @@
                 const analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
                 source.connect(analyser); analyser.connect(processor); processor.connect(audioCtx.destination);
-                
                 sessionStart = new Date(); speechMs = 0; silenceMs = 0; speechBuffer = []; hzMin = 9999; hzMax = 0; lastAutoSaveSpeechMs = 0;
                 isLive = true;
-
                 processor.onaudioprocess = (e) => {
                     if (!isLive) return;
                     const input = e.inputBuffer.getChannelData(0);
@@ -154,7 +160,6 @@
                     let sum = 0; for(let i=0; i<input.length; i++) sum += input[i]*input[i];
                     const rms = Math.sqrt(sum/input.length);
                     const frameMs = (4096 / audioCtx.sampleRate) * 1000;
-
                     if (rms > THRESHOLD) {
                         isSpeaking = true; silenceHoldFrames = Math.round(PADDING_MS / frameMs); speechMs += frameMs;
                         document.getElementById('status-light').classList.add('light-on');
@@ -166,12 +171,11 @@
                     if (isSpeaking || silenceHoldFrames > 0) speechBuffer.push(new Float32Array(input));
                     document.getElementById('speech-timer').innerText = formatTime(speechMs);
                     document.getElementById('silence-timer').innerText = formatTime(silenceMs);
-
                     if (speechMs - lastAutoSaveSpeechMs >= SPEECH_AUTO_SAVE_THRESHOLD) { fixNow(false); }
                 };
                 document.getElementById('setup-screen').classList.add('hidden');
                 document.getElementById('active-session').classList.remove('hidden');
-            } catch (err) { alert("Viga mikrofoni sisselülitamisel!"); }
+            } catch (err) { alert("Viga!"); }
         }
 
         function fixNow(isManual = true) {
@@ -216,22 +220,14 @@
                 document.getElementById('history-container').innerHTML = list.map(s => `
                     <div class="history-card">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <span class="text-green" style="font-size: 12px;">${s.start} - ${s.end}</span>
-                                ${s.pinned ? '<span>📌</span>' : ''}
-                            </div>
-                            <div style="display: flex; gap: 8px;">
-                                <span style="font-size: 9px; font-weight: bold; text-transform: uppercase;"><span class="dark-orange">Hz:</span> <span class="text-amber">${s.stats.hMin}-${s.stats.hMax}</span></span>
-                                <button onclick="delS(${s.id})" style="background: rgba(153, 27, 27, 0.2); color: #ef4444; border: none; font-size: 9px; font-weight: bold; padding: 4px 8px; border-radius: 8px;">KUSTUTA</button>
-                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;"><span class="text-green">${s.start} - ${s.end}</span>${s.pinned ? '<span>📌</span>' : ''}</div>
+                            <div style="display: flex; gap: 8px;"><span style="font-size: 9px; font-weight: bold;"><span class="dark-orange">Hz:</span> <span class="text-amber">${s.stats.hMin}-${s.stats.hMax}</span></span><button onclick="delS(${s.id})" style="background: rgba(153, 27, 27, 0.2); color: #ef4444; border: none; font-size: 9px; padding: 4px 8px; border-radius: 8px;">KUSTUTA</button></div>
                         </div>
-                        <div style="font-size: 10px; font-weight: bold; text-transform: uppercase; margin-bottom: 8px;">
-                            <span class="steel-blue">Kõne:</span> <span class="text-blue">${formatTime(s.stats.sMs)}</span> | <span class="steel-blue">Paus:</span> <span class="text-blue">${formatTime(s.stats.vMs)}</span>
-                        </div>
+                        <div style="font-size: 10px; font-weight: bold; margin-bottom: 8px;"><span class="steel-blue">Kõne:</span> <span class="text-blue">${formatTime(s.stats.sMs)}</span> | <span class="steel-blue">Paus:</span> <span class="text-blue">${formatTime(s.stats.vMs)}</span></div>
                         <audio src="${s.audio}" controls></audio>
                         <div style="display: flex; align-items: center; justify-content: space-between;">
                             <div style="flex-grow: 1; margin-right: 12px;">${s.note ? `<div style="padding: 12px; background: rgba(0,0,0,0.4); border-radius: 12px; color: #cbd5e1; font-style: italic; border-left: 2px solid #3b82f6;">${s.note}</div>` : ''}</div>
-                            <button onclick="downloadHTML(${s.id})" style="background: none; border: none; color: #fbbf24; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.1em;">HTML</button>
+                            <button onclick="downloadHTML(${s.id})" style="background: none; border: none; color: #fbbf24; font-size: 10px; font-weight: bold;">HTML</button>
                         </div>
                     </div>`).join('');
             };
