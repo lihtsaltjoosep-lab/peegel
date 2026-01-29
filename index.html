@@ -27,9 +27,6 @@
         .status-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; margin-bottom: 16px; }
         #status-light { width: 12px; height: 12px; border-radius: 50%; background: #334155; transition: 0.1s; display: inline-block; margin-right: 12px; }
         .light-on { background: #22c55e !important; box-shadow: 0 0 10px #22c55e; }
-        .timer-box { font-family: monospace; font-size: 12px; font-weight: bold; text-transform: uppercase; }
-        .text-green { color: #4ade80; }
-        .text-blue { color: #60a5fa; }
         #note-input { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #e2e8f0; font-size: 14px; height: 96px; resize: none; outline: none; padding: 12px; border-radius: 12px; margin-top: 12px; display: block; }
         .btn-grid { display: grid; grid-template-cols: 1fr 1fr; gap: 12px; }
         .btn { border: none; border-radius: 25px; padding: 20px; font-weight: bold; text-transform: uppercase; font-size: 12px; cursor: pointer; }
@@ -38,11 +35,9 @@
         .history-card { background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(255,255,255,0.05); border-radius: 30px; padding: 20px; margin-bottom: 16px; text-align: left; }
         audio { height: 35px; width: 100%; filter: invert(1); margin: 12px 0; }
         .hidden { display: none !important; }
-        #blackout-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; }
     </style>
 </head>
 <body>
-    <div id="blackout-overlay" onclick="this.style.display='none'"></div>
     <div class="main-scroll">
         <div class="container">
             <div class="header">
@@ -62,9 +57,9 @@
                 <div class="glass">
                     <div class="status-row">
                         <div id="status-light"></div>
-                        <div class="timer-box">
-                            <div class="text-green">Kõne: <span id="speech-timer">00:00</span></div>
-                            <div class="text-blue">Paus: <span id="silence-timer">00:00</span></div>
+                        <div style="font-family: monospace; font-size: 12px;">
+                            <div style="color:#4ade80">Kõne: <span id="speech-timer">00:00</span></div>
+                            <div style="color:#60a5fa">Paus: <span id="silence-timer">00:00</span></div>
                         </div>
                     </div>
                     <textarea id="note-input" placeholder="Märkmed..."></textarea>
@@ -78,6 +73,9 @@
         </div>
     </div>
     <script>
+        // See rida toob installi nupu tagasi
+        if ('serviceWorker' in navigator) { navigator.serviceWorker.register('data:application/javascript;base64,c2VsZi5hZGRFdmVudExpc3RlbmVyKCdpbnN0YWxsJywgKCUpID0+IHNlbGYuc2tpcFdhaXRpbmcoKSk7IHNlbGYuYWRkRXZlbnRMaXN0ZW5lcignZmV0Y2gnLCAoZSkgPT4gZS5yZXNwb25kV2l0aChmZXRjaChlLnJlcXVlc3QpKSk7'); }
+
         let isLive = false, audioCtx, processor, stream, speechBuffer = [], sessionStart, speechMs = 0, silenceMs = 0, db;
         const dbReq = indexedDB.open("MIR_STABLE_DB", 1);
         dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
@@ -87,30 +85,31 @@
         setInterval(updateClock, 1000);
 
         async function startSession() {
-            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            audioCtx = new AudioContext();
-            const source = audioCtx.createMediaStreamSource(stream);
-            processor = audioCtx.createScriptProcessor(4096, 1, 1);
-            source.connect(processor); processor.connect(audioCtx.destination);
-            sessionStart = new Date();
-            isLive = true;
-            processor.onaudioprocess = (e) => {
-                const input = e.inputBuffer.getChannelData(0);
-                let sum = 0; for(let i=0; i<input.length; i++) sum += input[i]*input[i];
-                const rms = Math.sqrt(sum/input.length);
-                if (rms > 0.005) {
-                    speechMs += (4096 / audioCtx.sampleRate) * 1000;
-                    speechBuffer.push(new Float32Array(input));
-                    document.getElementById('status-light').classList.add('light-on');
-                } else {
-                    silenceMs += (4096 / audioCtx.sampleRate) * 1000;
-                    document.getElementById('status-light').classList.remove('light-on');
-                }
-                document.getElementById('speech-timer').innerText = Math.floor(speechMs/1000) + "s";
-                document.getElementById('silence-timer').innerText = Math.floor(silenceMs/1000) + "s";
-            };
-            document.getElementById('setup-screen').classList.add('hidden');
-            document.getElementById('active-session').classList.remove('hidden');
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioCtx = new AudioContext();
+                const source = audioCtx.createMediaStreamSource(stream);
+                processor = audioCtx.createScriptProcessor(4096, 1, 1);
+                source.connect(processor); processor.connect(audioCtx.destination);
+                sessionStart = new Date(); isLive = true;
+                processor.onaudioprocess = (e) => {
+                    const input = e.inputBuffer.getChannelData(0);
+                    let sum = 0; for(let i=0; i<input.length; i++) sum += input[i]*input[i];
+                    const rms = Math.sqrt(sum/input.length);
+                    if (rms > 0.005) {
+                        speechMs += (4096 / audioCtx.sampleRate) * 1000;
+                        speechBuffer.push(new Float32Array(input));
+                        document.getElementById('status-light').classList.add('light-on');
+                    } else {
+                        silenceMs += (4096 / audioCtx.sampleRate) * 1000;
+                        document.getElementById('status-light').classList.remove('light-on');
+                    }
+                    document.getElementById('speech-timer').innerText = Math.floor(speechMs/1000) + "s";
+                    document.getElementById('silence-timer').innerText = Math.floor(silenceMs/1000) + "s";
+                };
+                document.getElementById('setup-screen').classList.add('hidden');
+                document.getElementById('active-session').classList.remove('hidden');
+            } catch(e) { alert("Luba mikrofon!"); }
         }
 
         function fixNow() {
