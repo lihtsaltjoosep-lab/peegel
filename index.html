@@ -2,15 +2,14 @@
 <html lang="et">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, minimal-ui">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-touch-fullscreen" content="yes">
     
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="manifest.json?v=33.2.6">
     
-    <title>Peegel v33.2.5</title>
+    <title>Peegel v33.2.6</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; height: 100vh; overflow: hidden; }
@@ -35,7 +34,7 @@
         <div class="flex justify-between items-center p-2 shrink-0">
             <div class="text-left">
                 <h1 class="text-3xl font-black italic uppercase text-blue-500 leading-none">Peegel</h1>
-                <span class="text-[9px] text-slate-700 font-bold uppercase ml-1">v33.2.5</span>
+                <span class="text-[9px] text-slate-700 font-bold uppercase ml-1">v33.2.6</span>
             </div>
             <div id="clock" class="text-xl font-light text-amber-600">00:00:00</div>
         </div>
@@ -56,7 +55,7 @@
                         <div id="status-light"></div>
                         <div class="font-mono text-xs font-bold uppercase flex gap-4">
                             <div class="text-green-400">Kõne: <span id="speech-timer">00:00</span></div>
-                            <div><span class="text-blue-500">Paus:</span> <span id="silence-timer" class="text-blue-400">00:00</span></div>
+                            <div class="text-blue-500">Paus: <span id="silence-timer" class="text-blue-400">00:00</span></div>
                         </div>
                     </div>
                     <div class="text-right">
@@ -158,7 +157,7 @@
                         </div>
                         <div class="font-mono text-[10px] uppercase font-bold mb-2 flex gap-3">
                             <div class="text-green-400">Kõne: <span class="text-cyan-400">${formatTime(s.stats.sMs)}</span></div>
-                            <div><span class="text-blue-500">Paus:</span> <span class="text-blue-400">${formatTime(s.stats.vMs)}</span></div>
+                            <div class="text-blue-500">Paus: <span class="text-blue-400">${formatTime(s.stats.vMs)}</span></div>
                         </div>
                         <audio src="${s.audio}" controls class="w-full h-8 opacity-90"></audio>
                         <div class="mt-2 text-right"><button onclick="downloadHTML(${s.id})" class="text-amber-400 underline uppercase font-bold text-[10px]">HTML</button></div>
