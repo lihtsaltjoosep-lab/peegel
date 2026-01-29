@@ -1,7 +1,8 @@
 {
-  "short_name": "MIR",
   "name": "MIR",
-  "start_url": "index.html",
+  "short_name": "MIR",
+  "start_url": "index.html?v=2",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#020617",
   "theme_color": "#020617",
