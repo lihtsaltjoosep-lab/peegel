@@ -9,7 +9,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#020617">
 
-    <link rel="manifest" href='data:application/json,{"name":"Peegel","short_name":"Peegel","start_url":"index.html","display":"standalone","background_color":"#020617","theme_color":"#020617","icons":[{"src":"https://cdn-icons-png.flaticon.com/512/2645/2645897.png","sizes":"512x512","type":"image/png"}]}'>
+    <link rel="manifest" href="manifest.json">
 
     <title>Peegel</title>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -38,20 +38,11 @@
 
         .glass-card { background: var(--glass); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
         .hidden { display: none !important; }
-        
         #blackout-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; }
-        
-        .play-ring { 
-            width: 140px; height: 140px; border-radius: 50%; background: var(--accent); 
-            border: 2px solid var(--text-main); display: flex; flex-direction: column; 
-            align-items: center; justify-content: center; margin: 0 auto; 
-        }
-
+        .play-ring { width: 140px; height: 140px; border-radius: 50%; background: var(--accent); border: 2px solid var(--text-main); display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 0 auto; }
         #status-light { width: 10px; height: 10px; border-radius: 50%; background: #1e293b; }
         .light-on { background: #10b981 !important; box-shadow: 0 0 15px #10b981; }
-        
-        audio { height: 35px; width: 100%; filter: invert(0.9) hue-rotate(180deg); margin-top: 10px; opacity: 0.8; }
-        
+        audio { height: 35px; width: 100%; filter: invert(0.9); margin-top: 10px; opacity: 0.8; }
         summary { list-style: none; outline: none; }
         summary::-webkit-details-marker { display: none; }
     </style>
@@ -79,7 +70,7 @@
             <div class="flex justify-end">
                 <button onclick="toggleBlackout(true)" class="text-[10px] font-light text-slate-500 uppercase px-5 py-2 rounded-full border border-white/10 glass-card">Pimenda</button>
             </div>
-            <div class="glass-card rounded-[40px] p-6 space-y-4 shadow-2xl">
+            <div class="glass-card rounded-[40px] p-6 space-y-4 shadow-2xl text-[200]">
                 <div class="flex justify-between items-center border-b border-white/5 pb-4">
                     <div class="flex items-center gap-4">
                         <div id="status-light"></div>
@@ -95,18 +86,17 @@
                 <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-28 text-slate-200 resize-none font-[200] leading-relaxed" placeholder="Kirjuta siia..."></textarea>
             </div>
             <div class="grid grid-cols-2 gap-4">
-                <button onclick="fixNow()" class="bg-blue-600 text-white py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest active:scale-95 shadow-lg">Fikseeri</button>
-                <button onclick="stopSession()" class="bg-red-900/20 text-red-500 py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest border border-red-900/20 active:scale-95">Lõpeta</button>
+                <button onclick="fixNow()" class="bg-blue-600 text-white py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest shadow-lg">Fikseeri</button>
+                <button onclick="stopSession()" class="bg-red-900/20 text-red-500 py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest border border-red-900/20">Lõpeta</button>
             </div>
         </div>
         <div id="history-container" class="mt-8 pb-20"></div>
     </div>
 
     <script>
-        // Fix1.1 Wake Lock & Inline Service Worker
+        // Registreerime välise sw.js faili
         if ('serviceWorker' in navigator) {
-            const blob = new Blob(["self.addEventListener('fetch', (e) => e.respondWith(fetch(e.request)));"], {type: 'text/javascript'});
-            navigator.serviceWorker.register(URL.createObjectURL(blob));
+            navigator.serviceWorker.register('sw.js').then(reg => reg.update()).catch(err => console.log("SW viga"));
         }
 
         let isLive = false, audioCtx, processor, stream, speechBuffer = [], sessionStart = null, speechMs = 0, silenceMs = 0;
@@ -125,7 +115,7 @@
         async function startSession() {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                audioCtx = new AudioContext();
                 const source = audioCtx.createMediaStreamSource(stream);
                 processor = audioCtx.createScriptProcessor(4096, 1, 1);
                 const analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
