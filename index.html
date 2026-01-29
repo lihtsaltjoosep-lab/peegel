@@ -6,10 +6,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
+    <meta name="display" content="standalone">
     
     <link rel="manifest" href="manifest.json">
     
-    <title>Peegel v33.2.2</title>
+    <title>Peegel v33.2.4</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; height: 100vh; overflow: hidden; }
@@ -31,17 +32,12 @@
 <body class="p-4 flex flex-col items-center">
     <div id="blackout-overlay"><div onclick="requestUnlock()" class="unlock-trigger"></div></div>
     <div class="w-full max-w-md space-y-3 text-center h-full flex flex-col">
-        <div class="flex justify-between items-baseline p-2 shrink-0">
-            <h1 class="text-3xl font-black italic uppercase text-blue-500">Peegel</h1>
-            <div class="flex flex-col items-end">
-                <div id="clock" class="text-xl font-light text-amber-600 leading-none">00:00:00</div>
-                <div class="flex gap-2 items-center mt-1">
-                    <span class="text-[9px] text-slate-700 font-bold uppercase">v33.2.2</span>
-                    <div id="hz-display" class="text-[10px] font-mono font-bold hidden">
-                        <span class="text-red-600">HZ</span> <span id="hz-min" class="text-orange-500">-</span><span class="text-orange-500">/</span><span id="hz-max" class="text-orange-500">-</span>
-                    </div>
-                </div>
+        <div class="flex justify-between items-center p-2 shrink-0">
+            <div class="text-left">
+                <h1 class="text-3xl font-black italic uppercase text-blue-500 leading-none">Peegel</h1>
+                <span class="text-[9px] text-slate-700 font-bold uppercase ml-1">v33.2.4</span>
             </div>
+            <div id="clock" class="text-xl font-light text-amber-600">00:00:00</div>
         </div>
 
         <div id="setup-screen" class="pt-16 pb-8 flex flex-col items-center shrink-0">
@@ -53,18 +49,25 @@
 
         <div id="active-session" class="hidden space-y-3 text-left shrink-0">
             <div class="flex justify-end pr-2"><button onclick="toggleBlackout(true)" class="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2 bg-slate-800/30 px-3 py-1 rounded-full border border-white/5"><span>Pimenda</span><div class="w-2 h-2 bg-black rounded-full border border-slate-600"></div></button></div>
+            
             <div class="glass rounded-[35px] p-5 space-y-3 border-t border-blue-500/20 shadow-2xl">
                 <div class="flex justify-between items-center border-b border-white/5 pb-2">
                     <div class="flex items-center gap-4">
                         <div id="status-light"></div>
                         <div class="font-mono text-xs font-bold uppercase flex gap-4">
-                            <div><span class="text-blue-400">Kõne:</span> <span id="speech-timer" class="text-cyan-400">00:00</span></div>
-                            <div><span class="text-blue-400">Vaikus:</span> <span id="silence-timer" class="text-cyan-400">00:00</span></div>
+                            <div><span class="text-green-400">Kõne:</span> <span id="speech-timer" class="text-cyan-400">00:00</span></div>
+                            <div><span class="text-blue-900">Paus:</span> <span id="silence-timer" class="text-cyan-400">00:00</span></div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div id="hz-indicator" class="text-[10px] font-mono font-bold">
+                            <span class="text-red-600">HZ</span> <span id="hz-min" class="text-orange-500">-</span><span class="text-orange-500">/</span><span id="hz-max" class="text-orange-500">-</span>
                         </div>
                     </div>
                 </div>
                 <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-20 text-slate-200 placeholder-slate-600 resize-none" placeholder="Kirjuta märkmed siia..."></textarea>
             </div>
+
             <div class="grid grid-cols-2 gap-3">
                 <button onclick="fixNow()" class="bg-blue-600 text-white py-4 rounded-[25px] font-bold uppercase text-xs active:scale-95 shadow-lg">Fikseeri</button>
                 <button onclick="stopSession()" class="bg-red-900/40 text-red-500 py-4 rounded-[25px] font-bold uppercase text-xs active:scale-95">Lõpeta</button>
@@ -74,9 +77,7 @@
     </div>
 
     <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').catch(() => {});
-        }
+        if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(() => {}); }
         let isLive = false, audioCtx, processor, stream, speechBuffer = []; 
         let sessionStart = null, speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0;
         const THRESHOLD = 0.008, PADDING_MS = 400; 
@@ -85,10 +86,7 @@
         function requestUnlock() { if (prompt("Sisesta kood:") === "5") toggleBlackout(false); }
         let db;
         const dbReq = indexedDB.open("Peegel_Database", 1);
-        dbReq.onupgradeneeded = e => {
-            db = e.target.result;
-            if (!db.objectStoreNames.contains("sessions")) db.createObjectStore("sessions", { keyPath: "id" });
-        };
+        dbReq.onupgradeneeded = e => { db = e.target.result; if (!db.objectStoreNames.contains("sessions")) db.createObjectStore("sessions", { keyPath: "id" }); };
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
         setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }, 1000);
         async function startSession() {
@@ -101,7 +99,6 @@
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
                 source.connect(analyser); analyser.connect(processor); processor.connect(audioCtx.destination);
                 sessionStart = new Date(); speechMs = 0; silenceMs = 0; speechBuffer = []; hzMin = 9999; hzMax = 0; isLive = true;
-                document.getElementById('hz-display').classList.remove('hidden');
                 processor.onaudioprocess = (e) => {
                     if (!isLive) return;
                     const input = e.inputBuffer.getChannelData(0); analyser.getByteFrequencyData(dataArray);
@@ -113,11 +110,7 @@
                     if (rms > THRESHOLD) {
                         isSpeaking = true; silenceHoldFrames = Math.round(PADDING_MS / fMs); speechMs += fMs;
                         document.getElementById('status-light').classList.add('light-on');
-                        if(hz > 50) { 
-                            if(hz < hzMin) hzMin = hz; if(hz > hzMax) hzMax = hz; 
-                            document.getElementById('hz-min').innerText = hzMin; 
-                            document.getElementById('hz-max').innerText = hzMax; 
-                        }
+                        if(hz > 50) { if(hz < hzMin) hzMin = hz; if(hz > hzMax) hzMax = hz; document.getElementById('hz-min').innerText = hzMin; document.getElementById('hz-max').innerText = hzMax; }
                     } else {
                         if (silenceHoldFrames > 0) { silenceHoldFrames--; speechMs += fMs; } 
                         else { isSpeaking = false; silenceMs += fMs; document.getElementById('status-light').classList.remove('light-on'); }
@@ -128,7 +121,7 @@
                 };
                 document.getElementById('setup-screen').classList.add('hidden');
                 document.getElementById('active-session').classList.remove('hidden');
-            } catch (err) { alert("Miku viga!"); }
+            } catch (err) { alert("Viga!"); }
         }
         function fixNow() {
             if (speechBuffer.length === 0) return;
@@ -156,11 +149,16 @@
                 const list = e.target.result.sort((a,b) => b.id - a.id);
                 document.getElementById('history-container').innerHTML = list.map(s => `
                     <div class="glass rounded-[30px] p-5 mb-4 text-xs">
-                        <div class="flex justify-between font-bold mb-3 items-center"><span class="text-green-400 text-[14px]">${s.start} - ${s.end}</span><button onclick="delS(${s.id})" class="text-[10px] text-red-500 bg-red-900/20 px-3 py-1 rounded-full uppercase">Kustuta</button></div>
+                        <div class="flex justify-between font-bold mb-3 items-center">
+                            <span class="text-green-400 text-[14px]">${s.start} - ${s.end}</span>
+                            <div class="flex items-center gap-3">
+                                <span class="text-[10px] font-mono font-bold"><span class="text-red-600">HZ:</span> <span class="text-orange-500">${s.stats.hMin}-${s.stats.hMax}</span></span>
+                                <button onclick="delS(${s.id})" class="text-[10px] text-red-500 bg-red-900/20 px-3 py-1 rounded-full uppercase">Kustuta</button>
+                            </div>
+                        </div>
                         <div class="font-mono text-[10px] uppercase font-bold mb-2 flex gap-3">
-                            <div><span class="text-blue-400">Kõne:</span> <span class="text-cyan-400">${formatTime(s.stats.sMs)}</span></div>
-                            <div><span class="text-blue-400">Vaikus:</span> <span class="text-cyan-400">${formatTime(s.stats.vMs)}</span></div>
-                            <div><span class="text-red-600">HZ:</span> <span class="text-orange-500">${s.stats.hMin}-${s.stats.hMax}</span></div>
+                            <div><span class="text-blue-900">Kõne:</span> <span class="text-cyan-400">${formatTime(s.stats.sMs)}</span></div>
+                            <div><span class="text-blue-400">Paus:</span> <span class="text-cyan-400">${formatTime(s.stats.vMs)}</span></div>
                         </div>
                         <audio src="${s.audio}" controls class="w-full h-8 opacity-90"></audio>
                         <div class="mt-2 text-right"><button onclick="downloadHTML(${s.id})" class="text-amber-400 underline uppercase font-bold text-[10px]">HTML</button></div>
