@@ -4,106 +4,132 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
     <link rel="manifest" href="manifest.json">
-    <title>Peegel v32.9.31</title>
+    <title>Peegel v32.4</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        :root { --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        html { background-color: #020617; overflow: hidden; height: 100%; }
-        body { 
-            background-color: #020617; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
-            margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; position: fixed; 
-        }
-        .main-scroll { height: 100vh; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px; padding-top: calc(20px + var(--sat)); padding-bottom: 120px; }
-        .container { max-width: 450px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 24px; text-align: center; }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 8px; }
-        .logo-box { display: flex; align-items: center; gap: 10px; }
-        .eye-icon { width: 32px; height: 32px; background: #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid #fff; }
-        .logo { font-size: 30px; font-weight: 900; font-style: italic; text-transform: uppercase; color: #fff; margin: 0; letter-spacing: 2px; }
-        .clock { font-size: 20px; font-weight: 300; color: #d97706; font-variant-numeric: tabular-nums; }
-        .play-ring { 
-            width: 150px; height: 150px; border-radius: 50%; background: #1d4ed8; border: 5px solid #f4ead5; 
-            box-shadow: 0 0 30px rgba(244, 234, 213, 0.3); display: flex; flex-direction: column; 
-            align-items: center; justify-content: center; cursor: pointer; margin: 80px auto 30px;
-        }
-        .play-ring svg { width: 48px; height: 48px; fill: #f4ead5; margin-left: 8px; margin-bottom: 4px; }
-        .play-text { color: #f4ead5; font-weight: 900; font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; }
-        .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); border-radius: 35px; padding: 24px; text-align: left; }
-        .status-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; margin-bottom: 16px; }
-        #status-light { width: 12px; height: 12px; border-radius: 50%; background: #334155; transition: 0.1s; display: inline-block; margin-right: 12px; }
-        .light-on { background: #22c55e !important; box-shadow: 0 0 10px #22c55e; }
-        #note-input { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #e2e8f0; font-size: 14px; height: 96px; resize: none; outline: none; padding: 12px; border-radius: 12px; margin-top: 12px; display: block; }
-        .btn-grid { display: grid; grid-template-cols: 1fr 1fr; gap: 12px; }
-        .btn { border: none; border-radius: 25px; padding: 20px; font-weight: bold; text-transform: uppercase; font-size: 12px; cursor: pointer; }
-        .btn-blue { background: #2563eb; color: white; }
-        .btn-red { background: rgba(127, 29, 29, 0.4); color: #ef4444; }
-        .history-card { background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(255,255,255,0.05); border-radius: 30px; padding: 20px; margin-bottom: 16px; text-align: left; }
-        audio { height: 35px; width: 100%; filter: invert(1); margin: 12px 0; }
+        body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; height: 100vh; }
+        .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
         .hidden { display: none !important; }
+        
+        #blackout-overlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #000; z-index: 9999; display: none;
+        }
+
+        .unlock-btn {
+            position: absolute; bottom: 20px; left: 20px;
+            width: 40px; height: 40px; border-radius: 50%;
+            background: rgba(30, 41, 59, 0.3); border: 1px solid rgba(255,255,255,0.05);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+        }
+
+        .play-ring {
+            width: 150px; height: 150px; border-radius: 50%;
+            background: #1d4ed8; border: 5px solid #f4ead5;
+            box-shadow: 0 0 30px rgba(244, 234, 213, 0.3);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: pointer; transition: transform 0.2s;
+        }
+        .play-ring:active { transform: scale(0.95); }
+        .play-icon-svg { width: 50px; height: 50px; fill: #f4ead5; margin-left: 8px; margin-bottom: 5px; }
+        .play-text { color: #f4ead5; font-weight: 900; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; }
+
+        #status-light { width: 12px; height: 12px; border-radius: 50%; background: #334155; transition: 0.1s; }
+        .light-on { background: #22c55e !important; box-shadow: 0 0 10px #22c55e; }
+        audio { height: 35px; width: 100%; border-radius: 8px; filter: invert(1) brightness(0.8); margin-top: 5px; }
     </style>
 </head>
-<body>
-    <div class="main-scroll">
-        <div class="container">
-            <div class="header">
-                <div class="logo-box">
-                    <div class="eye-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></div>
-                    <h1 class="logo">PEEGEL</h1>
-                </div>
-                <div id="clock" class="clock">00:00:00</div>
-            </div>
-            <div id="setup-screen">
-                <div onclick="startSession()" class="play-ring">
-                    <svg viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z"></path></svg>
-                    <div class="play-text">Alusta</div>
-                </div>
-            </div>
-            <div id="active-session" class="hidden">
-                <div class="glass">
-                    <div class="status-row">
-                        <div id="status-light"></div>
-                        <div style="font-family: monospace; font-size: 12px;">
-                            <div style="color:#4ade80">Kõne: <span id="speech-timer">00:00</span></div>
-                            <div style="color:#60a5fa">Paus: <span id="silence-timer">00:00</span></div>
-                        </div>
-                    </div>
-                    <textarea id="note-input" placeholder="Märkmed..."></textarea>
-                </div>
-                <div class="btn-grid" style="margin-top: 24px;">
-                    <button onclick="fixNow()" class="btn btn-blue">Fikseeri</button>
-                    <button onclick="stopSession()" class="btn btn-red">Lõpeta</button>
-                </div>
-            </div>
-            <div id="history-container"></div>
+<body class="p-4 flex flex-col items-center">
+
+    <div id="blackout-overlay">
+        <div onclick="toggleBlackout()" class="unlock-btn">
+            <svg class="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
         </div>
     </div>
-    <script>
-        if ('serviceWorker' in navigator) { navigator.serviceWorker.register('data:application/javascript;base64,c2VsZi5hZGRFdmVudExpc3RlbmVyKCdpbnN0YWxsJywgKCUpID0+IHNlbGYuc2tpcFdhaXRpbmcoKSk7IHNlbGYuYWRkRXZlbnRMaXN0ZW5lcignZmV0Y2gnLCAoZSkgPT4gZS5yZXNwb25kV2l0aChmZXRjaChlLnJlcXVlc3QpKSk7'); }
+    
+    <div class="w-full max-w-md space-y-4 text-center">
+        <div class="flex justify-between items-center p-2">
+            <h1 class="text-3xl font-black italic uppercase text-blue-500">Peegel</h1>
+            <div id="clock" class="text-xl font-light text-amber-600">00:00:00</div>
+        </div>
 
-        let isLive = false, audioCtx, processor, stream, speechBuffer = [], sessionStart, speechMs = 0, silenceMs = 0, db;
-        const dbReq = indexedDB.open("PeegelDB", 1);
+        <div id="setup-screen" class="pt-20 pb-8 flex flex-col items-center">
+            <div onclick="startSession()" class="play-ring">
+                <svg class="play-icon-svg" viewBox="0 0 24 24"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z" stroke="#f4ead5" stroke-width="2" stroke-linejoin="round"/></svg>
+                <div class="play-text">Alusta</div>
+            </div>
+        </div>
+
+        <div id="active-session" class="hidden space-y-4 text-left">
+            <div class="flex justify-end pr-2">
+                <button onclick="toggleBlackout()" class="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2 bg-slate-800/30 px-3 py-1 rounded-full border border-white/5">
+                    <span>Pimenda</span>
+                    <div class="w-2 h-2 bg-black rounded-full border border-slate-600"></div>
+                </button>
+            </div>
+
+            <div class="glass rounded-[35px] p-6 space-y-4 border-t border-blue-500/20 shadow-2xl">
+                <div class="flex justify-between items-center border-b border-white/5 pb-3">
+                    <div class="flex items-center gap-4">
+                        <div id="status-light"></div>
+                        <div class="font-mono text-xs font-bold uppercase">
+                            <div class="text-green-400">Kõne: <span id="speech-timer">00:00</span></div>
+                            <div class="text-blue-400">Vaikus: <span id="silence-timer">00:00</span></div>
+                        </div>
+                    </div>
+                </div>
+                <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 placeholder-slate-600 resize-none" placeholder="Kirjuta märkmed siia..."></textarea>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="fixNow()" class="bg-blue-600 text-white py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95 shadow-lg">Fikseeri</button>
+                <button onclick="stopSession()" class="bg-red-900/40 text-red-500 py-5 rounded-[25px] font-bold uppercase text-xs active:scale-95">Lõpeta</button>
+            </div>
+        </div>
+
+        <div id="history-container" class="space-y-4 pb-24 text-left w-full mt-6"></div>
+    </div>
+
+    <script>
+        let isLive = false, wakeLock = null;
+        let audioCtx, processor, stream, speechBuffer = []; 
+        let sessionStart = null, speechMs = 0, silenceMs = 0;
+
+        function toggleBlackout() {
+            const overlay = document.getElementById('blackout-overlay');
+            overlay.style.display = (overlay.style.display === 'block') ? 'none' : 'block';
+        }
+
+        let db;
+        const dbReq = indexedDB.open("Peegel_v32_Data", 1);
         dbReq.onupgradeneeded = e => { e.target.result.createObjectStore("sessions", { keyPath: "id" }); };
         dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
 
-        function updateClock() { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }
-        setInterval(updateClock, 1000); updateClock();
+        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }, 1000);
 
         async function startSession() {
             try {
+                if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); }
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                audioCtx = new AudioContext();
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioCtx.createMediaStreamSource(stream);
                 processor = audioCtx.createScriptProcessor(4096, 1, 1);
                 source.connect(processor); processor.connect(audioCtx.destination);
+
                 sessionStart = new Date(); isLive = true;
                 processor.onaudioprocess = (e) => {
                     if (!isLive) return;
                     const input = e.inputBuffer.getChannelData(0);
-                    let sum = 0; for(let i=0; i<input.length; i++) sum += input[i]*input[i];
+                    let sum = 0;
+                    for(let i=0; i<input.length; i++) sum += input[i]*input[i];
                     const rms = Math.sqrt(sum/input.length);
-                    if (rms > 0.005) {
+                    if (rms > 0.008) {
                         speechMs += (4096 / audioCtx.sampleRate) * 1000;
                         speechBuffer.push(new Float32Array(input));
                         document.getElementById('status-light').classList.add('light-on');
@@ -111,12 +137,12 @@
                         silenceMs += (4096 / audioCtx.sampleRate) * 1000;
                         document.getElementById('status-light').classList.remove('light-on');
                     }
-                    document.getElementById('speech-timer').innerText = Math.floor(speechMs/1000) + "s";
-                    document.getElementById('silence-timer').innerText = Math.floor(silenceMs/1000) + "s";
+                    document.getElementById('speech-timer').innerText = formatTime(speechMs);
+                    document.getElementById('silence-timer').innerText = formatTime(silenceMs);
                 };
                 document.getElementById('setup-screen').classList.add('hidden');
                 document.getElementById('active-session').classList.remove('hidden');
-            } catch(e) { alert("Mikrofon on vajalik!"); }
+            } catch (err) { alert("Viga!"); }
         }
 
         function fixNow() {
@@ -144,14 +170,15 @@
             tx.objectStore("sessions").getAll().onsuccess = e => {
                 const list = e.target.result.sort((a,b) => b.id - a.id);
                 document.getElementById('history-container').innerHTML = list.map(s => `
-                    <div class="history-card">
-                        <div style="color:#4ade80; font-weight:bold;">${s.start}</div>
+                    <div class="glass rounded-[30px] p-5 mb-4 text-xs">
+                        <div class="text-green-400 font-bold mb-2">${s.start}</div>
                         <audio src="${s.audio}" controls></audio>
-                        <div style="font-size:12px; color:#cbd5e1; margin-top:8px;">${s.note || ""}</div>
+                        <div class="mt-2 text-slate-300 italic">${s.note || ""}</div>
                     </div>`).join('');
             };
         }
-        function stopSession() { isLive = false; location.reload(); }
+        function formatTime(ms) { const s = Math.floor(ms / 1000); const m = Math.floor(s / 60); const sec = s % 60; return `${m}m ${sec}s`; }
+        function stopSession() { isLive = false; if(wakeLock) wakeLock.release(); location.reload(); }
     </script>
 </body>
 </html>
