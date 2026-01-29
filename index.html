@@ -9,7 +9,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#020617">
 
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="manifest.json?v=35.3">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2645/2645897.png">
 
     <title>Peegel</title>
@@ -54,9 +54,7 @@
     <div id="main-scroller">
         <div class="w-full max-w-md mx-auto flex flex-col min-h-screen pb-10">
             <header class="flex justify-between items-baseline mb-6 pt-4">
-                <div>
-                    <h1 class="text-xl font-black italic tracking-tighter uppercase text-blue-600 leading-none text-blue-500">Peegel</h1>
-                    </div>
+                <h1 class="text-xl font-black italic tracking-tighter uppercase text-blue-500 leading-none">Peegel</h1>
                 <div id="clock" class="text-2xl font-[100] text-amber-500/60 font-mono tracking-tighter text-right leading-none">00:00:00</div>
             </header>
 
@@ -96,7 +94,7 @@
     </div>
 
     <script>
-        if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(() => {}); }
+        if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').then(reg => reg.update()).catch(() => {}); }
         
         let wakeLock = null;
         async function requestWakeLock() {
@@ -121,12 +119,14 @@
 
         setInterval(() => { 
             document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE');
-            if(isLive) window.scrollTo(0, 1);
         }, 1000);
 
         async function startSession() {
             try {
                 requestWakeLock();
+                // Sunnime naviriba peitu kerimise kaudu
+                setTimeout(() => window.scrollTo(0, 1), 100);
+                
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioCtx.createMediaStreamSource(stream);
