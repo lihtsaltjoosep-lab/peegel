@@ -1,3 +1,3 @@
-self.addEventListener('fetch', (event) => {
-  event.respondWith(fetch(event.request).catch(() => {}));
+self.addEventListener('fetch', function(event) {
+  // Tühi Service Worker, mis on vajalik PWA installimiseks
 });
