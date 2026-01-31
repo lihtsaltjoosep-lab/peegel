@@ -15,12 +15,8 @@
         :root { --bg: #020617; --glass: rgba(15, 23, 42, 0.6); --accent: #1d4ed8; --text-main: #f4ead5; }
         html, body { background-color: var(--bg); color: #e2e8f0; font-family: 'Inter', sans-serif; margin: 0; height: 100dvh; width: 100%; overflow: hidden; position: fixed; overscroll-behavior: none; }
         #main-scroller { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom) 24px; }
-        
-        /* Logo: Kitsas ja puhas */
         .logo-text { font-size: 1.8rem; font-weight: 200; letter-spacing: -0.02em; text-transform: uppercase; font-style: italic; opacity: 0.9; }
-        /* Kell: Õrn ja kitsas */
         #clock { font-size: 1.1rem; font-weight: 100; color: rgba(245, 158, 11, 0.4); }
-
         .glass-card { background: var(--glass); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); }
         .hidden { display: none !important; }
         #blackout-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; }
@@ -75,13 +71,12 @@
 
     <script>
         let wakeLock = null, db, audioCtx, processor, stream;
-        let speechBuffer = [], preBuffer = [], isLive = false;
+        let speechBuffer = [], isLive = false;
         let sessionStart = null, speechMs = 0, silenceMs = 0;
         let hzMin = 9999, hzMax = 0, isSpeaking = false, silenceHoldFrames = 0;
         
-        const THRESHOLD = 0.004;
-        const PRE_ROLL_MS = 300; 
-        const POST_ROLL_MS = 500;
+        const THRESHOLD = 0.005;
+        const POST_ROLL_MS = 400;
 
         function init() {
             if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(() => {}); }
@@ -103,18 +98,25 @@
         async function startSession() {
             try {
                 await requestWakeLock();
-                stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, sampleRate: 44100 } });
+                // Toores heli ilma kaja ja topelt-lindistuseta
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: { 
+                        echoCancellation: false, 
+                        noiseSuppression: false, 
+                        autoGainControl: false 
+                    } 
+                });
+                
                 audioCtx = new AudioContext({ sampleRate: 44100 });
                 const source = audioCtx.createMediaStreamSource(stream);
                 processor = audioCtx.createScriptProcessor(4096, 1, 1);
-                const analyser = audioCtx.createAnalyser(); analyser.fftSize = 1024;
+                const analyser = audioCtx.createAnalyser(); analyser.fftSize = 512;
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
                 source.connect(analyser); analyser.connect(processor); processor.connect(audioCtx.destination);
                 
-                sessionStart = new Date(); speechMs = 0; silenceMs = 0; speechBuffer = []; preBuffer = [];
+                sessionStart = new Date(); speechMs = 0; silenceMs = 0; speechBuffer = [];
                 isLive = true;
                 const frameDuration = (4096 / 44100) * 1000;
-                const preBufferLimit = Math.ceil(PRE_ROLL_MS / frameDuration);
 
                 processor.onaudioprocess = (e) => {
                     if (!isLive) return;
@@ -127,21 +129,26 @@
                     const hz = Math.round(mi * (audioCtx.sampleRate/2) / dataArray.length);
                     const rms = Math.sqrt(input.reduce((a, b) => a + b*b, 0)/input.length);
 
-                    preBuffer.push(chunk);
-                    if (preBuffer.length > preBufferLimit) preBuffer.shift();
-
                     if (rms > THRESHOLD) {
-                        if (!isSpeaking) { speechBuffer.push(...preBuffer); preBuffer = []; }
-                        isSpeaking = true; 
-                        silenceHoldFrames = Math.round(POST_ROLL_MS / frameDuration); 
+                        isSpeaking = true;
+                        silenceHoldFrames = Math.round(POST_ROLL_MS / frameDuration);
                         speechMs += frameDuration;
                         document.getElementById('status-light').classList.add('light-on');
                         if(hz > 50) { if(hz < hzMin) hzMin = hz; if(hz > hzMax) hzMax = hz; document.getElementById('hz-min').innerText = hzMin; document.getElementById('hz-max').innerText = hzMax; }
                     } else {
-                        if (silenceHoldFrames > 0) { silenceHoldFrames--; speechMs += frameDuration; } 
-                        else { isSpeaking = false; silenceMs += frameDuration; document.getElementById('status-light').classList.remove('light-on'); }
+                        if (silenceHoldFrames > 0) {
+                            silenceHoldFrames--;
+                            speechMs += frameDuration;
+                        } else {
+                            isSpeaking = false;
+                            silenceMs += frameDuration;
+                            document.getElementById('status-light').classList.remove('light-on');
+                        }
                     }
-                    if (isSpeaking || silenceHoldFrames > 0) { speechBuffer.push(chunk); }
+                    
+                    if (isSpeaking || silenceHoldFrames > 0) {
+                        speechBuffer.push(chunk);
+                    }
                     
                     document.getElementById('speech-timer').innerText = formatTime(speechMs);
                     document.getElementById('silence-timer').innerText = formatTime(silenceMs);
@@ -155,6 +162,7 @@
             if (speechBuffer.length === 0) return;
             let noteText = document.getElementById('note-input').value;
             let hasMarker = isManual;
+            
             const sStart = sessionStart.toLocaleTimeString('et-EE'), sEnd = new Date().toLocaleTimeString('et-EE');
             const buf = [...speechBuffer];
             const stats = { sMs: speechMs, vMs: silenceMs, hMin: hzMin, hMax: hzMax };
