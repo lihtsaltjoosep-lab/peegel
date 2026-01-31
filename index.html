@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
@@ -13,7 +14,6 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* SINU ALGSNE CSS (Inter 100/200, glass-card jne) */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;900&display=swap');
         :root { --bg: #020617; --glass: rgba(15, 23, 42, 0.6); --accent: #1d4ed8; --text-main: #f4ead5; }
         
@@ -22,36 +22,187 @@
             margin: 0; height: 100%; width: 100%; overflow: hidden; position: fixed; 
             overscroll-behavior: none;
         }
-        #main-scroller { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 24px; }
-        .glass-card { background: var(--glass); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
+
+        #main-scroller { 
+            height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; 
+            padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom) 24px; 
+        }
+
+        .glass-card { background: var(--glass); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); }
+        .hidden { display: none !important; }
+        
         #blackout-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; }
         .unlock-trigger { position: absolute; bottom: 0; left: 0; width: 150px; height: 150px; z-index: 10000; }
-        /* ... ülejäänud sinu CSS ... */
+
+        .play-ring { 
+            width: 140px; height: 140px; border-radius: 50%; background: var(--accent); 
+            border: 2px solid var(--text-main); display: flex; flex-direction: column; 
+            align-items: center; justify-content: center; margin: 40px auto; 
+        }
+
+        #status-light { width: 10px; height: 10px; border-radius: 50%; background: #1e293b; transition: 0.2s; }
+        .light-on { background: #10b981 !important; box-shadow: 0 0 15px #10b981; }
+        
+        audio { height: 35px; width: 100%; filter: invert(0.9) hue-rotate(180deg); margin-top: 10px; opacity: 0.8; }
+        summary { list-style: none; outline: none; }
+        summary::-webkit-details-marker { display: none; }
     </style>
 </head>
 <body onload="init()">
     <div id="blackout-overlay"><div onclick="requestUnlock()" class="unlock-trigger"></div></div>
     
     <div id="main-scroller">
+        <div class="w-full max-w-md mx-auto">
+            <header class="flex justify-between items-baseline mb-8 pt-4">
+                <h1 class="text-2xl font-black italic tracking-tighter uppercase text-blue-600 leading-none">Peegel</h1>
+                <div id="clock" class="text-2xl font-[100] text-amber-500/60 font-mono tracking-tighter text-right leading-none">00:00:00</div>
+            </header>
+
+            <div id="setup-screen" class="py-10">
+                <div onclick="startSession()" class="play-ring cursor-pointer active:scale-95 transition-transform">
+                    <svg width="45" height="45" viewBox="0 0 24 24" fill="#f4ead5"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z"/></svg>
+                    <div class="text-[12px] font-[900] uppercase tracking-widest text-[#f4ead5] mt-2">Start</div>
+                </div>
+            </div>
+
+            <div id="active-session" class="hidden space-y-4">
+                <div class="flex justify-end">
+                    <button onclick="toggleBlackout(true)" class="text-[10px] font-light text-slate-500 uppercase px-4 py-2 rounded-full border border-white/10 glass-card">Pimenda</button>
+                </div>
+                <div class="glass-card rounded-[40px] p-6 space-y-6">
+                    <div class="flex justify-between items-center border-b border-white/5 pb-4">
+                        <div class="flex items-center gap-4">
+                            <div id="status-light"></div>
+                            <div class="font-mono text-[11px] font-[100] uppercase flex gap-4 tracking-tight">
+                                <div class="text-green-400 font-bold">Kõne <span id="speech-timer" class="font-black">00:00</span></div>
+                                <div class="text-blue-500 font-bold">Paus <span id="silence-timer" class="font-black">00:00</span></div>
+                            </div>
+                        </div>
+                        <div class="text-[10px] font-mono font-light bg-red-950/30 px-3 py-1 rounded-full border border-red-900/20">
+                            <span class="text-red-600 font-bold">HZ</span> <span id="hz-min" class="text-orange-500 font-bold">-</span>/<span id="hz-max" class="text-orange-500 font-bold">-</span>
+                        </div>
+                    </div>
+                    <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 resize-none font-[200] leading-relaxed" placeholder="Kirjuta siia..."></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <button onclick="fixNow()" class="bg-blue-600 text-white py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest active:scale-95 shadow-lg">Fikseeri</button>
+                    <button onclick="stopSession()" class="bg-red-900/20 text-red-500 py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest border border-red-900/20 active:scale-95">Lõpeta</button>
+                </div>
+            </div>
+            <div id="history-container" class="mt-8 space-y-4"></div>
         </div>
+    </div>
 
     <script>
-        // KRIITILINE: Service Workeri registreerimine offline-toeks
         function init() {
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('sw.js')
-                .then(() => console.log("Offline režiim valmis"))
-                .catch(err => console.log("SW viga:", err));
+            if ('serviceWorker' in navigator) { 
+                navigator.serviceWorker.register('sw.js').then(reg => reg.update()); 
             }
-            // Sinu kell ja muud algkäivituse asjad
-            setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }, 1000);
+            setInterval(() => { 
+                document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); 
+            }, 1000);
             window.scrollTo(0, 1);
         }
 
-        // KÕIK SINU ALGSESED FUNKTSIOONID (startSession, fixNow, renderHistory jne)
-        // ... kopeeri siia oma toimiv JS kood ...
-        
+        let isLive = false, audioCtx, processor, stream, speechBuffer = [], sessionStart = null, speechMs = 0, silenceMs = 0;
+        let hzMin = 9999, hzMax = 0, isSpeaking = false, silenceHoldFrames = 0;
+        const THRESHOLD = 0.008, PADDING_MS = 400;
+
+        function toggleBlackout(show) { document.getElementById('blackout-overlay').style.display = show ? 'block' : 'none'; }
         function requestUnlock() { if (prompt("Kood:") === "5") toggleBlackout(false); }
+
+        let db; const dbReq = indexedDB.open("Peegel_Database", 1);
+        dbReq.onupgradeneeded = e => { db = e.target.result; if (!db.objectStoreNames.contains("sessions")) db.createObjectStore("sessions", { keyPath: "id" }); };
+        dbReq.onsuccess = e => { db = e.target.result; renderHistory(); };
+
+        async function startSession() {
+            try {
+                window.scrollTo(0, 1);
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioCtx.createMediaStreamSource(stream);
+                processor = audioCtx.createScriptProcessor(4096, 1, 1);
+                const analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
+                const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                source.connect(analyser); analyser.connect(processor); processor.connect(audioCtx.destination);
+                sessionStart = new Date(); speechMs = 0; silenceMs = 0; speechBuffer = []; isLive = true;
+                
+                processor.onaudioprocess = (e) => {
+                    if (!isLive) return;
+                    const input = e.inputBuffer.getChannelData(0); analyser.getByteFrequencyData(dataArray);
+                    let mv = -1, mi = -1; for (let i = 0; i < dataArray.length; i++) { if (dataArray[i] > mv) { mv = dataArray[i]; mi = i; } }
+                    const hz = Math.round(mi * (audioCtx.sampleRate/2) / dataArray.length);
+                    const rms = Math.sqrt(input.reduce((a, b) => a + b*b, 0)/input.length);
+                    const fMs = (4096 / audioCtx.sampleRate) * 1000;
+
+                    if (rms > THRESHOLD) {
+                        isSpeaking = true; silenceHoldFrames = Math.round(PADDING_MS / fMs); speechMs += fMs;
+                        document.getElementById('status-light').classList.add('light-on');
+                        if(hz > 50) { if(hz < hzMin) hzMin = hz; if(hz > hzMax) hzMax = hz; document.getElementById('hz-min').innerText = hzMin; document.getElementById('hz-max').innerText = hzMax; }
+                    } else {
+                        if (silenceHoldFrames > 0) { silenceHoldFrames--; speechMs += fMs; } 
+                        else { isSpeaking = false; silenceMs += fMs; document.getElementById('status-light').classList.remove('light-on'); }
+                    }
+                    if (isSpeaking || silenceHoldFrames > 0) speechBuffer.push(new Float32Array(input));
+                    document.getElementById('speech-timer').innerText = formatTime(speechMs);
+                    document.getElementById('silence-timer').innerText = formatTime(silenceMs);
+                };
+                document.getElementById('setup-screen').classList.add('hidden');
+                document.getElementById('active-session').classList.remove('hidden');
+            } catch (err) { alert("Luba mikrofon."); }
+        }
+
+        function fixNow() {
+            if (speechBuffer.length === 0) return;
+            const noteText = document.getElementById('note-input').value;
+            const startT = sessionStart.toLocaleTimeString('et-EE'), endT = new Date().toLocaleTimeString('et-EE');
+            const buf = [...speechBuffer], sM = speechMs, vM = silenceMs, hMi = hzMin, hMa = hzMax;
+            speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0; sessionStart = new Date();
+            document.getElementById('note-input').value = "";
+            const length = buf.reduce((a, c) => a + c.length, 0);
+            const wavBuffer = new ArrayBuffer(44 + length * 2); const view = new DataView(wavBuffer);
+            const writeS = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+            writeS(0, 'RIFF'); view.setUint32(4, 32 + length * 2, true); writeS(8, 'WAVE'); writeS(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, 44100, true); view.setUint32(28, 88200, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeS(36, 'data'); view.setUint32(40, length * 2, true);
+            let offset = 44; for (let chunk of buf) { for (let i = 0; i < chunk.length; i++) { const s = Math.max(-1, Math.min(1, chunk[i])); view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true); offset += 2; } }
+            const reader = new FileReader(); reader.readAsDataURL(new Blob([wavBuffer], { type: 'audio/wav' }));
+            reader.onloadend = () => {
+                const tx = db.transaction("sessions", "readwrite");
+                tx.objectStore("sessions").add({ id: Date.now(), start: startT, end: endT, note: noteText, audio: reader.result, stats: { sMs: sM, vMs: vM, hMin: hMi, hMax: hMa } });
+                tx.oncomplete = renderHistory;
+            };
+        }
+
+        function renderHistory() {
+            if(!db) return;
+            db.transaction("sessions", "readonly").objectStore("sessions").getAll().onsuccess = e => {
+                const list = e.target.result.sort((a,b) => b.id - a.id);
+                document.getElementById('history-container').innerHTML = list.map(s => `
+                    <div class="glass-card rounded-[32px] p-5 text-xs shadow-xl">
+                        <div class="flex justify-between items-center mb-4 text-emerald-400 font-[100] text-[14px]">
+                            ${s.start} - ${s.end}
+                            <button onclick="delS(${s.id})" class="text-[9px] text-red-400/50 uppercase font-light">Kustuta</button>
+                        </div>
+                        <div class="flex justify-between items-center mb-4 font-mono text-[10px] uppercase font-[100] text-blue-500 tracking-tight">
+                            <div>Paus: <span class="text-blue-300 font-bold">${formatTime(s.stats.vMs)}</span></div>
+                            <div class="text-red-500/50">HZ <span class="text-orange-500 font-bold">${s.stats.hMin}-${s.stats.hMax}</span></div>
+                        </div>
+                        <audio src="${s.audio}" controls></audio>
+                        <div class="mt-4 flex justify-between items-center">
+                            ${s.note ? `<details class="flex-grow"><summary class="text-slate-500 cursor-pointer text-[10px] uppercase font-bold tracking-widest">Märkmed</summary><div class="text-slate-400 italic mt-2 text-[11px] leading-relaxed border-t border-white/5 pt-2 font-[100]">${s.note}</div></details>` : '<div></div>'}
+                            <button onclick="downloadHTML(${s.id})" class="text-amber-500/80 text-[10px] uppercase font-black tracking-widest border-b border-amber-500/20 pb-0.5 ml-4">HTML</button>
+                        </div>
+                    </div>`).join('');
+            };
+        }
+        function formatTime(ms) { const s = Math.round(ms / 1000); return `${Math.floor(s/60)}m ${s%60}s`; }
+        function stopSession() { isLive = false; setTimeout(() => location.reload(), 500); }
+        window.delS = id => { if(confirm("Kustuta?")) { db.transaction("sessions", "readwrite").objectStore("sessions").delete(id).onsuccess = renderHistory; } };
+        window.downloadHTML = id => {
+            db.transaction("sessions", "readonly").objectStore("sessions").get(id).onsuccess = (e) => {
+                const s = e.target.result; const h = `<html><body style="background:#020617;color:#eee;padding:40px;font-family:sans-serif;"><h1>${s.start}-${s.end}</h1><audio controls src="${s.audio}"></audio><p>${s.note || ""}</p></body></html>`;
+                const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([h], {type: 'text/html'})); a.download = `Sessioon_${s.id}.html`; a.click();
+            };
+        }
     </script>
 </body>
 </html>
