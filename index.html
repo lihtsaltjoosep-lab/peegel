@@ -9,25 +9,14 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#020617">
 
-    <link rel="manifest" href='data:application/json,{"name":"Peegel","short_name":"Peegel","start_url":"index.html","display":"standalone","background_color":"#020617","theme_color":"#020617","icons":[{"src":"https://cdn-icons-png.flaticon.com/512/2645/2645897.png","sizes":"512x512","type":"image/png"}]}'>
-
+    <link rel="manifest" href="manifest.json">
     <title>Peegel</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;900&display=swap');
         :root { --bg: #020617; --glass: rgba(15, 23, 42, 0.6); --accent: #1d4ed8; --text-main: #f4ead5; }
-        
-        html, body { 
-            background-color: var(--bg); color: #e2e8f0; font-family: 'Inter', sans-serif; 
-            margin: 0; height: 100%; width: 100%; overflow: hidden; position: fixed; 
-            overscroll-behavior: none;
-        }
-
-        #main-scroller { 
-            height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; 
-            padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom) 24px; 
-        }
-
+        html, body { background-color: var(--bg); color: #e2e8f0; font-family: 'Inter', sans-serif; margin: 0; height: 100%; width: 100%; overflow: hidden; position: fixed; overscroll-behavior: none; }
+        #main-scroller { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom) 24px; }
         .glass-card { background: var(--glass); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); }
         .hidden { display: none !important; }
         #blackout-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; }
@@ -40,12 +29,11 @@
 </head>
 <body onload="init()">
     <div id="blackout-overlay"><div onclick="requestUnlock()" class="unlock-trigger"></div></div>
-    
     <div id="main-scroller">
         <div class="w-full max-w-md mx-auto">
             <header class="flex justify-between items-baseline mb-8 pt-4">
                 <h1 class="text-2xl font-black italic tracking-tighter uppercase text-blue-600 leading-none">Peegel</h1>
-                <div id="clock" class="text-2xl font-[100] text-amber-500/60 font-mono tracking-tighter text-right leading-none">00:00:00</div>
+                <div id="clock" class="text-2xl font-[100] text-amber-500/60 font-mono tracking-tighter text-right">00:00:00</div>
             </header>
 
             <div id="setup-screen" class="py-10">
@@ -59,20 +47,20 @@
                 <div class="flex justify-end">
                     <button onclick="toggleBlackout(true)" class="text-[10px] font-light text-slate-500 uppercase px-4 py-2 rounded-full border border-white/10 glass-card">Pimenda</button>
                 </div>
-                <div class="glass-card rounded-[40px] p-6 space-y-6">
+                <div class="glass-card rounded-[40px] p-6 space-y-6 text-[100]">
                     <div class="flex justify-between items-center border-b border-white/5 pb-4">
                         <div class="flex items-center gap-4">
                             <div id="status-light"></div>
-                            <div class="font-mono text-[11px] font-[100] uppercase flex gap-4 tracking-tight text-slate-400">
+                            <div class="font-mono text-[11px] font-[100] uppercase flex gap-4 tracking-tight">
                                 <div>Kõne: <span id="speech-timer" class="text-green-400 font-bold">00:00</span></div>
                                 <div>Paus: <span id="silence-timer" class="text-blue-500 font-bold">00:00</span></div>
                             </div>
                         </div>
                         <div class="text-[10px] font-mono font-light bg-red-950/30 px-3 py-1 rounded-full border border-red-900/20">
-                            <span class="text-red-600 font-bold">HZ</span> <span id="hz-min" class="text-orange-500 font-bold">-</span>/<span id="hz-max" class="text-orange-500 font-bold">-</span>
+                            <span class="text-red-600 font-bold text-[900]">HZ</span> <span id="hz-min" class="text-orange-500 font-bold">-</span>/<span id="hz-max" class="text-orange-500 font-bold">-</span>
                         </div>
                     </div>
-                    <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 resize-none font-[200] leading-relaxed" placeholder="Kirjuta siia..."></textarea>
+                    <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 resize-none font-[200] leading-relaxed" placeholder="Märkmed..."></textarea>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <button onclick="fixNow()" class="bg-blue-600 text-white py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest active:scale-95 shadow-lg">Fikseeri</button>
@@ -85,11 +73,7 @@
 
     <script>
         function init() {
-            if ('serviceWorker' in navigator) {
-                const swCode = "self.addEventListener('fetch', (e) => e.respondWith(fetch(e.request)));";
-                const blob = new Blob([swCode], {type: 'text/javascript'});
-                navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
-            }
+            if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(() => {}); }
             setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }, 1000);
             window.scrollTo(0, 1);
         }
@@ -170,7 +154,7 @@
                             ${s.start} - ${s.end}
                             <button onclick="delS(${s.id})" class="text-[9px] text-red-400/50 uppercase font-light">Kustuta</button>
                         </div>
-                        <div class="flex justify-between items-center mb-4 font-mono text-[10px] uppercase font-[100] tracking-tight text-slate-400">
+                        <div class="flex justify-between items-center mb-4 font-mono text-[10px] uppercase font-[100] tracking-tight">
                             <div class="flex gap-4">
                                 <div>Kõne: <span class="text-green-400 font-bold">${formatTime(s.stats.sMs)}</span></div>
                                 <div>Paus: <span class="text-blue-500 font-bold">${formatTime(s.stats.vMs)}</span></div>
