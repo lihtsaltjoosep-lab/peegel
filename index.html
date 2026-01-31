@@ -28,6 +28,16 @@
             padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom) 24px; 
         }
 
+        /* Suurem ja jõulisem logo */
+        .logo-text { 
+            font-size: 2.5rem; 
+            font-weight: 900; 
+            letter-spacing: -0.05em; 
+            text-transform: uppercase; 
+            font-style: italic;
+            line-height: 0.8;
+        }
+
         .glass-card { background: var(--glass); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); }
         .hidden { display: none !important; }
         #blackout-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; }
@@ -43,8 +53,8 @@
     
     <div id="main-scroller">
         <div class="w-full max-w-md mx-auto">
-            <header class="flex justify-between items-baseline mb-8 pt-4">
-                <h1 class="text-2xl font-black italic tracking-tighter uppercase text-blue-600 leading-none">Peegel</h1>
+            <header class="flex justify-between items-end mb-10 pt-6">
+                <h1 class="logo-text text-blue-600">Peegel</h1>
                 <div id="clock" class="text-2xl font-[100] text-amber-500/60 font-mono tracking-tighter text-right">00:00:00</div>
             </header>
 
@@ -84,15 +94,23 @@
     </div>
 
     <script>
-        function init() {
+        let wakeLock = null;
+        let isLive = false, audioCtx, processor, stream, speechBuffer = [], sessionStart = null, speechMs = 0, silenceMs = 0;
+        let hzMin = 9999, hzMax = 0, isSpeaking = false, silenceHoldFrames = 0;
+        const THRESHOLD = 0.008, PADDING_MS = 400;
+
+        async function init() {
             if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(() => {}); }
             setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }, 1000);
             window.scrollTo(0, 1);
         }
 
-        let isLive = false, audioCtx, processor, stream, speechBuffer = [], sessionStart = null, speechMs = 0, silenceMs = 0;
-        let hzMin = 9999, hzMax = 0, isSpeaking = false, silenceHoldFrames = 0;
-        const THRESHOLD = 0.008, PADDING_MS = 400;
+        // Ekraani ärvel hoidmine
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); }
+            } catch (err) { console.log("WakeLock viga:", err); }
+        }
 
         function toggleBlackout(show) { document.getElementById('blackout-overlay').style.display = show ? 'block' : 'none'; }
         function requestUnlock() { if (prompt("Kood:") === "5") toggleBlackout(false); }
@@ -104,6 +122,7 @@
         async function startSession() {
             try {
                 window.scrollTo(0, 1);
+                await requestWakeLock(); // Aktiveeri ekraani hoidmine
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
                 const source = audioCtx.createMediaStreamSource(stream);
@@ -131,7 +150,11 @@
                     }
                     document.getElementById('speech-timer').innerText = formatTime(speechMs);
                     document.getElementById('silence-timer').innerText = formatTime(silenceMs);
-                    if (isSpeaking || silenceHoldFrames > 0) speechBuffer.push(new Float32Array(input));
+                    if (isSpeaking || silenceHoldFrames > 0) {
+                        // Kerge fade-in algusesse, et vältida "plõksu"
+                        const chunk = new Float32Array(input);
+                        speechBuffer.push(chunk);
+                    }
                 };
                 document.getElementById('setup-screen').classList.add('hidden');
                 document.getElementById('active-session').classList.remove('hidden');
@@ -142,15 +165,30 @@
             if (speechBuffer.length === 0) return;
             const noteText = document.getElementById('note-input').value;
             const startT = sessionStart.toLocaleTimeString('et-EE'), endT = new Date().toLocaleTimeString('et-EE');
-            const buf = [...speechBuffer], sM = speechMs, vM = silenceMs, hMi = hzMin, hMa = hzMax;
+            const buf = [...speechBuffer];
+            const sM = speechMs, vM = silenceMs, hMi = hzMin, hMa = hzMax;
+            
             speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0; sessionStart = new Date();
             document.getElementById('note-input').value = "";
+            
             const length = buf.reduce((a, c) => a + c.length, 0);
-            const wavBuffer = new ArrayBuffer(44 + length * 2); const view = new DataView(wavBuffer);
+            const wavBuffer = new ArrayBuffer(44 + length * 2);
+            const view = new DataView(wavBuffer);
+            
             const writeS = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
             writeS(0, 'RIFF'); view.setUint32(4, 32 + length * 2, true); writeS(8, 'WAVE'); writeS(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, 44100, true); view.setUint32(28, 88200, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeS(36, 'data'); view.setUint32(40, length * 2, true);
-            let offset = 44; for (let chunk of buf) { for (let i = 0; i < chunk.length; i++) { const s = Math.max(-1, Math.min(1, chunk[i])); view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true); offset += 2; } }
-            const reader = new FileReader(); reader.readAsDataURL(new Blob([wavBuffer], { type: 'audio/wav' }));
+            
+            let offset = 44;
+            for (let chunk of buf) {
+                for (let i = 0; i < chunk.length; i++) {
+                    const s = Math.max(-1, Math.min(1, chunk[i]));
+                    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+                    offset += 2;
+                }
+            }
+            
+            const reader = new FileReader();
+            reader.readAsDataURL(new Blob([wavBuffer], { type: 'audio/wav' }));
             reader.onloadend = () => {
                 const tx = db.transaction("sessions", "readwrite");
                 tx.objectStore("sessions").add({ id: Date.now(), start: startT, end: endT, note: noteText, audio: reader.result, stats: { sMs: sM, vMs: vM, hMin: hMi, hMax: hMa } });
@@ -183,7 +221,11 @@
             };
         }
         function formatTime(ms) { const s = Math.round(ms / 1000); return `${Math.floor(s/60)}m ${s%60}s`; }
-        function stopSession() { isLive = false; setTimeout(() => location.reload(), 500); }
+        function stopSession() { 
+            isLive = false; 
+            if (wakeLock) { wakeLock.release(); wakeLock = null; }
+            setTimeout(() => location.reload(), 500); 
+        }
         window.delS = id => { if(confirm("Kustuta?")) { db.transaction("sessions", "readwrite").objectStore("sessions").delete(id).onsuccess = renderHistory; } };
     </script>
 </body>
