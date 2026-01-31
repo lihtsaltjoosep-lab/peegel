@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
-    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#020617">
 
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="app.webmanifest">
 
     <title>Peegel</title>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -18,22 +18,13 @@
         :root { --bg: #020617; --glass: rgba(15, 23, 42, 0.6); --accent: #1d4ed8; --text-main: #f4ead5; }
         
         html, body { 
-            background-color: var(--bg); 
-            color: #e2e8f0; 
-            font-family: 'Inter', sans-serif; 
-            margin: 0; 
-            /* See 100dvh on oluline naviriba peitmiseks */
-            height: 100dvh; 
-            width: 100%; 
-            overflow: hidden; 
-            position: fixed; 
+            background-color: var(--bg); color: #e2e8f0; font-family: 'Inter', sans-serif; 
+            margin: 0; height: 100dvh; width: 100%; overflow: hidden; position: fixed; 
             overscroll-behavior: none;
         }
 
         #main-scroller { 
-            height: 100%; 
-            overflow-y: auto; 
-            -webkit-overflow-scrolling: touch; 
+            height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; 
             padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom) 24px; 
         }
 
