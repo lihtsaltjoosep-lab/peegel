@@ -10,6 +10,7 @@
     <meta name="theme-color" content="#020617">
 
     <link rel="manifest" href="manifest.json">
+
     <title>Peegel</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -104,6 +105,7 @@
             try {
                 window.scrollTo(0, 1);
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                // KVALITEET LUKUSTATUD: 44100Hz
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
                 const source = audioCtx.createMediaStreamSource(stream);
                 processor = audioCtx.createScriptProcessor(4096, 1, 1);
