@@ -15,8 +15,18 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;900&display=swap');
         :root { --bg: #020617; --glass: rgba(15, 23, 42, 0.6); --accent: #1d4ed8; --text-main: #f4ead5; }
-        html, body { background-color: var(--bg); color: #e2e8f0; font-family: 'Inter', sans-serif; margin: 0; height: 100%; width: 100%; overflow: hidden; position: fixed; overscroll-behavior: none; }
-        #main-scroller { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom) 24px; }
+        
+        html, body { 
+            background-color: var(--bg); color: #e2e8f0; font-family: 'Inter', sans-serif; 
+            margin: 0; height: 100%; width: 100%; overflow: hidden; position: fixed; 
+            overscroll-behavior: none;
+        }
+
+        #main-scroller { 
+            height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; 
+            padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom) 24px; 
+        }
+
         .glass-card { background: var(--glass); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); }
         .hidden { display: none !important; }
         #blackout-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; }
@@ -29,6 +39,7 @@
 </head>
 <body onload="init()">
     <div id="blackout-overlay"><div onclick="requestUnlock()" class="unlock-trigger"></div></div>
+    
     <div id="main-scroller">
         <div class="w-full max-w-md mx-auto">
             <header class="flex justify-between items-baseline mb-8 pt-4">
@@ -47,17 +58,17 @@
                 <div class="flex justify-end">
                     <button onclick="toggleBlackout(true)" class="text-[10px] font-light text-slate-500 uppercase px-4 py-2 rounded-full border border-white/10 glass-card">Pimenda</button>
                 </div>
-                <div class="glass-card rounded-[40px] p-6 space-y-6 text-[100]">
+                <div class="glass-card rounded-[40px] p-6 space-y-6">
                     <div class="flex justify-between items-center border-b border-white/5 pb-4">
                         <div class="flex items-center gap-4">
                             <div id="status-light"></div>
-                            <div class="font-mono text-[11px] font-[100] uppercase flex gap-4 tracking-tight">
+                            <div class="font-mono text-[11px] font-[100] uppercase flex gap-4 tracking-tight text-slate-400">
                                 <div>Kõne: <span id="speech-timer" class="text-green-400 font-bold">00:00</span></div>
                                 <div>Paus: <span id="silence-timer" class="text-blue-500 font-bold">00:00</span></div>
                             </div>
                         </div>
                         <div class="text-[10px] font-mono font-light bg-red-950/30 px-3 py-1 rounded-full border border-red-900/20">
-                            <span class="text-red-600 font-bold text-[900]">HZ</span> <span id="hz-min" class="text-orange-500 font-bold">-</span>/<span id="hz-max" class="text-orange-500 font-bold">-</span>
+                            <span class="text-red-600 font-bold">HZ</span> <span id="hz-min" class="text-orange-500 font-bold">-</span>/<span id="hz-max" class="text-orange-500 font-bold">-</span>
                         </div>
                     </div>
                     <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 resize-none font-[200] leading-relaxed" placeholder="Märkmed..."></textarea>
@@ -93,13 +104,14 @@
             try {
                 window.scrollTo(0, 1);
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                audioCtx = new AudioContext();
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
                 const source = audioCtx.createMediaStreamSource(stream);
                 processor = audioCtx.createScriptProcessor(4096, 1, 1);
-                const analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
+                const analyser = audioCtx.createAnalyser(); analyser.fftSize = 512;
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
                 source.connect(analyser); analyser.connect(processor); processor.connect(audioCtx.destination);
                 sessionStart = new Date(); speechMs = 0; silenceMs = 0; speechBuffer = []; isLive = true;
+                
                 processor.onaudioprocess = (e) => {
                     if (!isLive) return;
                     const input = e.inputBuffer.getChannelData(0); analyser.getByteFrequencyData(dataArray);
@@ -107,6 +119,7 @@
                     const hz = Math.round(mi * (audioCtx.sampleRate/2) / dataArray.length);
                     const rms = Math.sqrt(input.reduce((a, b) => a + b*b, 0)/input.length);
                     const fMs = (4096 / audioCtx.sampleRate) * 1000;
+
                     if (rms > THRESHOLD) {
                         isSpeaking = true; silenceHoldFrames = Math.round(PADDING_MS / fMs); speechMs += fMs;
                         document.getElementById('status-light').classList.add('light-on');
@@ -154,7 +167,7 @@
                             ${s.start} - ${s.end}
                             <button onclick="delS(${s.id})" class="text-[9px] text-red-400/50 uppercase font-light">Kustuta</button>
                         </div>
-                        <div class="flex justify-between items-center mb-4 font-mono text-[10px] uppercase font-[100] tracking-tight">
+                        <div class="flex justify-between items-center mb-4 font-mono text-[10px] uppercase font-[100] tracking-tight text-slate-400">
                             <div class="flex gap-4">
                                 <div>Kõne: <span class="text-green-400 font-bold">${formatTime(s.stats.sMs)}</span></div>
                                 <div>Paus: <span class="text-blue-500 font-bold">${formatTime(s.stats.vMs)}</span></div>
