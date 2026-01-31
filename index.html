@@ -34,14 +34,19 @@
                 <h1 class="logo-text text-blue-600">Peegel</h1>
                 <div id="clock" class="text-2xl font-[100] text-amber-500/60 font-mono tracking-tighter text-right">00:00:00</div>
             </header>
+            
             <div id="setup-screen" class="py-10">
                 <div onclick="startSession()" class="play-ring cursor-pointer active:scale-95 transition-transform">
                     <svg width="45" height="45" viewBox="0 0 24 24" fill="#f4ead5"><path d="M7,4.5v15c0,0.8,0.9,1.3,1.6,0.9l11.5-7.5c0.6-0.4,0.6-1.4,0-1.8L8.6,3.6C7.9,3.2,7,3.7,7,4.5z"/></svg>
                     <div class="text-[12px] font-[900] uppercase tracking-widest text-[#f4ead5] mt-2">Start</div>
                 </div>
             </div>
+
             <div id="active-session" class="hidden space-y-4">
-                <div class="flex justify-end"><button onclick="toggleBlackout(true)" class="text-[10px] font-light text-slate-500 uppercase px-4 py-2 rounded-full border border-white/10 glass-card">Pimenda</button></div>
+                <div class="flex justify-between items-center">
+                    <button onclick="addMarker()" class="text-[10px] font-bold text-amber-400 uppercase px-6 py-2 rounded-full border border-amber-500/20 glass-card active:bg-amber-500/20">Märgi hetk</button>
+                    <button onclick="toggleBlackout(true)" class="text-[10px] font-light text-slate-500 uppercase px-4 py-2 rounded-full border border-white/10 glass-card">Pimenda</button>
+                </div>
                 <div class="glass-card rounded-[40px] p-6 space-y-6">
                     <div class="flex justify-between items-center border-b border-white/5 pb-4">
                         <div class="flex items-center gap-4">
@@ -70,15 +75,22 @@
         let sessionStart = null, speechMs = 0, silenceMs = 0;
         let hzMin = 9999, hzMax = 0, isSpeaking = false, silenceHoldFrames = 0;
         
-        // PARANDATUD SEADISTUSED
-        const THRESHOLD = 0.005; // Tundlikum (oli 0.008)
-        const PRE_ROLL_MS = 200; // 0,2 sek enne
-        const POST_ROLL_MS = 400; // 0,4 sek pärast
+        const THRESHOLD = 0.005;
+        const PRE_ROLL_MS = 200;
+        const POST_ROLL_MS = 400;
 
         async function init() {
             if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(() => {}); }
             setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }, 1000);
             window.scrollTo(0, 1);
+        }
+
+        function addMarker() {
+            const now = new Date();
+            const elapsed = formatTime(now - sessionStart);
+            const area = document.getElementById('note-input');
+            area.value += (area.value ? "\n" : "") + `[📍 ${elapsed}] `;
+            area.focus();
         }
 
         async function requestWakeLock() {
@@ -95,7 +107,14 @@
         async function startSession() {
             try {
                 await requestWakeLock();
-                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                // Toores heli ilma "padjata" - keelame filtrid
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false
+                    } 
+                });
                 audioCtx = new AudioContext({ sampleRate: 44100 });
                 const source = audioCtx.createMediaStreamSource(stream);
                 processor = audioCtx.createScriptProcessor(4096, 1, 1);
@@ -105,50 +124,33 @@
                 
                 sessionStart = new Date(); speechMs = 0; silenceMs = 0; speechBuffer = []; preBuffer = [];
                 isLive = true;
-                
                 const preBufferCount = Math.ceil(PRE_ROLL_MS / ((4096 / 44100) * 1000));
 
                 processor.onaudioprocess = (e) => {
                     if (!isLive) return;
                     const input = e.inputBuffer.getChannelData(0);
                     analyser.getByteFrequencyData(dataArray);
-                    
                     let mv = -1, mi = -1; 
                     for (let i = 0; i < dataArray.length; i++) { if (dataArray[i] > mv) { mv = dataArray[i]; mi = i; } }
                     const hz = Math.round(mi * (audioCtx.sampleRate/2) / dataArray.length);
                     const rms = Math.sqrt(input.reduce((a, b) => a + b*b, 0)/input.length);
                     const fMs = (4096 / audioCtx.sampleRate) * 1000;
 
-                    // Pidev pre-buffering (0.2s)
                     preBuffer.push(new Float32Array(input));
                     if (preBuffer.length > preBufferCount) preBuffer.shift();
 
                     if (rms > THRESHOLD) {
-                        if (!isSpeaking) {
-                            // Kui kõne algab, lisa pre-buffer speechBufferisse
-                            speechBuffer.push(...preBuffer);
-                            preBuffer = [];
-                        }
+                        if (!isSpeaking) { speechBuffer.push(...preBuffer); preBuffer = []; }
                         isSpeaking = true;
                         silenceHoldFrames = Math.round(POST_ROLL_MS / fMs);
                         speechMs += fMs;
                         document.getElementById('status-light').classList.add('light-on');
                         if(hz > 50) { if(hz < hzMin) hzMin = hz; if(hz > hzMax) hzMax = hz; document.getElementById('hz-min').innerText = hzMin; document.getElementById('hz-max').innerText = hzMax; }
                     } else {
-                        if (silenceHoldFrames > 0) {
-                            silenceHoldFrames--;
-                            speechMs += fMs;
-                        } else {
-                            isSpeaking = false;
-                            silenceMs += fMs;
-                            document.getElementById('status-light').classList.remove('light-on');
-                        }
+                        if (silenceHoldFrames > 0) { silenceHoldFrames--; speechMs += fMs; } 
+                        else { isSpeaking = false; silenceMs += fMs; document.getElementById('status-light').classList.remove('light-on'); }
                     }
-                    
-                    if (isSpeaking || silenceHoldFrames > 0) {
-                        speechBuffer.push(new Float32Array(input));
-                    }
-
+                    if (isSpeaking || silenceHoldFrames > 0) { speechBuffer.push(new Float32Array(input)); }
                     document.getElementById('speech-timer').innerText = formatTime(speechMs);
                     document.getElementById('silence-timer').innerText = formatTime(silenceMs);
                 };
@@ -199,13 +201,22 @@
                             <div class="text-red-500/50">HZ <span class="text-orange-500 font-bold">${s.stats.hMin}-${s.stats.hMax}</span></div>
                         </div>
                         <audio src="${s.audio}" controls></audio>
-                        <div class="mt-4">${s.note ? `<details class="flex-grow"><summary class="text-slate-500 cursor-pointer text-[10px] uppercase font-bold tracking-widest">Märkmed</summary><div class="text-slate-400 italic mt-2 text-[11px] leading-relaxed border-t border-white/5 pt-2 font-[100]">${s.note}</div></details>` : ''}</div>
+                        <div class="mt-4 flex justify-between items-center">
+                            ${s.note ? `<details class="flex-grow"><summary class="text-slate-500 cursor-pointer text-[10px] uppercase font-bold tracking-widest">Märkmed</summary><div class="text-slate-400 italic mt-2 text-[11px] leading-relaxed border-t border-white/5 pt-2 font-[100]">${s.note}</div></details>` : '<div></div>'}
+                            <button onclick="downloadHTML(${s.id})" class="text-amber-500/80 text-[10px] uppercase font-black tracking-widest border-b border-amber-500/20 pb-0.5 ml-4">HTML</button>
+                        </div>
                     </div>`).join('');
             };
         }
         function formatTime(ms) { const s = Math.round(ms / 1000); return `${Math.floor(s/60)}m ${s%60}s`; }
         function stopSession() { isLive = false; if (wakeLock) wakeLock.release(); setTimeout(() => location.reload(), 500); }
         window.delS = id => { if(confirm("Kustuta?")) { db.transaction("sessions", "readwrite").objectStore("sessions").delete(id).onsuccess = renderHistory; } };
+        window.downloadHTML = id => {
+            db.transaction("sessions", "readonly").objectStore("sessions").get(id).onsuccess = (e) => {
+                const s = e.target.result; const h = `<html><body style="background:#020617;color:#eee;padding:40px;font-family:sans-serif;"><h1>${s.start}-${s.end}</h1><audio controls src="${s.audio}"></audio><p>${s.note || ""}</p></body></html>`;
+                const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([h], {type: 'text/html'})); a.download = `Sessioon_${s.id}.html`; a.click();
+            };
+        }
     </script>
 </body>
 </html>
