@@ -15,8 +15,12 @@
         :root { --bg: #020617; --glass: rgba(15, 23, 42, 0.6); --accent: #1d4ed8; --text-main: #f4ead5; }
         html, body { background-color: var(--bg); color: #e2e8f0; font-family: 'Inter', sans-serif; margin: 0; height: 100dvh; width: 100%; overflow: hidden; position: fixed; overscroll-behavior: none; }
         #main-scroller { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom) 24px; }
-        .logo-text { font-size: 2.1rem; font-weight: 300; letter-spacing: -0.05em; text-transform: uppercase; font-style: italic; line-height: 0.8; }
-        #clock { font-size: 1.2rem; font-weight: 200; color: rgba(245, 158, 11, 0.5); }
+        
+        /* Logo: Kitsas ja puhas */
+        .logo-text { font-size: 1.8rem; font-weight: 200; letter-spacing: -0.02em; text-transform: uppercase; font-style: italic; opacity: 0.9; }
+        /* Kell: Õrn ja kitsas */
+        #clock { font-size: 1.1rem; font-weight: 100; color: rgba(245, 158, 11, 0.4); }
+
         .glass-card { background: var(--glass); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); }
         .hidden { display: none !important; }
         #blackout-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; }
@@ -31,7 +35,7 @@
     <div id="blackout-overlay"><div onclick="requestUnlock()" class="unlock-trigger"></div></div>
     <div id="main-scroller">
         <div class="w-full max-w-md mx-auto">
-            <header class="flex justify-between items-end mb-10 pt-6">
+            <header class="flex justify-between items-center mb-10 pt-6">
                 <h1 class="logo-text text-blue-600">Peegel</h1>
                 <div id="clock" class="tracking-tighter text-right">00:00:00</div>
             </header>
@@ -75,9 +79,9 @@
         let sessionStart = null, speechMs = 0, silenceMs = 0;
         let hzMin = 9999, hzMax = 0, isSpeaking = false, silenceHoldFrames = 0;
         
-        const THRESHOLD = 0.004; // Veelgi tundlikum
-        const PRE_ROLL_MS = 300; // Pikem eellindistus sujuvuse huvides
-        const POST_ROLL_MS = 500; // Pikem lõpp, et vältida järsku katkemist
+        const THRESHOLD = 0.004;
+        const PRE_ROLL_MS = 300; 
+        const POST_ROLL_MS = 500;
 
         function init() {
             if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(() => {}); }
@@ -99,29 +103,13 @@
         async function startSession() {
             try {
                 await requestWakeLock();
-                // STUDIO SETTINGS: Lülitame välja kõik brauseri moonutajad
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: { 
-                        echoCancellation: false, 
-                        noiseSuppression: false, 
-                        autoGainControl: false,
-                        channelCount: 1,
-                        sampleRate: 44100
-                    } 
-                });
-                
-                audioCtx = new AudioContext({ sampleRate: 44100, latencyHint: 'playback' });
+                stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, sampleRate: 44100 } });
+                audioCtx = new AudioContext({ sampleRate: 44100 });
                 const source = audioCtx.createMediaStreamSource(stream);
-                
-                // Kasutame suuremat puhvrit (16384), et heli oleks stabiilsem ja kvaliteetne
                 processor = audioCtx.createScriptProcessor(4096, 1, 1);
-                const analyser = audioCtx.createAnalyser(); 
-                analyser.fftSize = 1024; // Täpsem sagedusanalüüs
-                
+                const analyser = audioCtx.createAnalyser(); analyser.fftSize = 1024;
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
-                source.connect(analyser); 
-                analyser.connect(processor); 
-                processor.connect(audioCtx.destination);
+                source.connect(analyser); analyser.connect(processor); processor.connect(audioCtx.destination);
                 
                 sessionStart = new Date(); speechMs = 0; silenceMs = 0; speechBuffer = []; preBuffer = [];
                 isLive = true;
@@ -167,7 +155,6 @@
             if (speechBuffer.length === 0) return;
             let noteText = document.getElementById('note-input').value;
             let hasMarker = isManual;
-            
             const sStart = sessionStart.toLocaleTimeString('et-EE'), sEnd = new Date().toLocaleTimeString('et-EE');
             const buf = [...speechBuffer];
             const stats = { sMs: speechMs, vMs: silenceMs, hMin: hzMin, hMax: hzMax };
