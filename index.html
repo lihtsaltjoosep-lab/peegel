@@ -57,7 +57,7 @@
                         </div>
                         <div class="text-[10px] font-mono font-light bg-red-950/30 px-3 py-1 rounded-full border border-red-900/20"><span class="text-red-600 font-bold">HZ</span> <span id="hz-min" class="text-orange-500 font-bold">-</span>/<span id="hz-max" class="text-orange-500 font-bold">-</span></div>
                     </div>
-                    <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 resize-none font-[200] leading-relaxed" placeholder="Märkmed..."></textarea>
+                    <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 resize-none font-[200] leading-relaxed" placeholder="Kirjuta siia..."></textarea>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <button onclick="fixNow(true)" class="bg-blue-600 text-white py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest active:scale-95 shadow-lg">Fikseeri</button>
@@ -69,9 +69,10 @@
     </div>
 
     <script>
-        let wakeLock = null, db, audioCtx, processor, stream, sessionStart = null;
+        let wakeLock = null, db, audioCtx, processor, stream;
         let speechBuffer = [], preBuffer = [], isLive = false;
-        let speechMs = 0, silenceMs = 0, hzMin = 9999, hzMax = 0, isSpeaking = false, silenceHoldFrames = 0;
+        let sessionStart = null, speechMs = 0, silenceMs = 0;
+        let hzMin = 9999, hzMax = 0, isSpeaking = false, silenceHoldFrames = 0;
         
         const THRESHOLD = 0.005;
         const PRE_ROLL_MS = 200;
@@ -97,9 +98,8 @@
         async function startSession() {
             try {
                 await requestWakeLock();
-                // Taastatud töökindel mikrofoni ühendus
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
+                audioCtx = new AudioContext({ sampleRate: 44100 });
                 const source = audioCtx.createMediaStreamSource(stream);
                 processor = audioCtx.createScriptProcessor(4096, 1, 1);
                 const analyser = audioCtx.createAnalyser(); analyser.fftSize = 512;
@@ -108,33 +108,36 @@
                 
                 sessionStart = new Date(); speechMs = 0; silenceMs = 0; speechBuffer = []; preBuffer = [];
                 isLive = true;
-                const preBufferCount = Math.ceil(PRE_ROLL_MS / ((4096 / 44100) * 1000));
+                const frameDuration = (4096 / 44100) * 1000;
+                const preBufferLimit = Math.ceil(PRE_ROLL_MS / frameDuration);
 
                 processor.onaudioprocess = (e) => {
                     if (!isLive) return;
                     const input = e.inputBuffer.getChannelData(0);
+                    const chunk = new Float32Array(input);
                     analyser.getByteFrequencyData(dataArray);
+                    
                     let mv = -1, mi = -1; 
                     for (let i = 0; i < dataArray.length; i++) { if (dataArray[i] > mv) { mv = dataArray[i]; mi = i; } }
                     const hz = Math.round(mi * (audioCtx.sampleRate/2) / dataArray.length);
                     const rms = Math.sqrt(input.reduce((a, b) => a + b*b, 0)/input.length);
-                    const fMs = (4096 / audioCtx.sampleRate) * 1000;
 
-                    preBuffer.push(new Float32Array(input));
-                    if (preBuffer.length > preBufferCount) preBuffer.shift();
+                    preBuffer.push(chunk);
+                    if (preBuffer.length > preBufferLimit) preBuffer.shift();
 
                     if (rms > THRESHOLD) {
                         if (!isSpeaking) { speechBuffer.push(...preBuffer); preBuffer = []; }
                         isSpeaking = true;
-                        silenceHoldFrames = Math.round(POST_ROLL_MS / fMs);
-                        speechMs += fMs;
+                        silenceHoldFrames = Math.round(POST_ROLL_MS / frameDuration);
+                        speechMs += frameDuration;
                         document.getElementById('status-light').classList.add('light-on');
                         if(hz > 50) { if(hz < hzMin) hzMin = hz; if(hz > hzMax) hzMax = hz; document.getElementById('hz-min').innerText = hzMin; document.getElementById('hz-max').innerText = hzMax; }
                     } else {
-                        if (silenceHoldFrames > 0) { silenceHoldFrames--; speechMs += fMs; } 
-                        else { isSpeaking = false; silenceMs += fMs; document.getElementById('status-light').classList.remove('light-on'); }
+                        if (silenceHoldFrames > 0) { silenceHoldFrames--; speechMs += frameDuration; } 
+                        else { isSpeaking = false; silenceMs += frameDuration; document.getElementById('status-light').classList.remove('light-on'); }
                     }
-                    if (isSpeaking || silenceHoldFrames > 0) { speechBuffer.push(new Float32Array(input)); }
+                    if (isSpeaking || silenceHoldFrames > 0) { speechBuffer.push(chunk); }
+                    
                     document.getElementById('speech-timer').innerText = formatTime(speechMs);
                     document.getElementById('silence-timer').innerText = formatTime(silenceMs);
                 };
@@ -143,19 +146,16 @@
             } catch (err) { alert("Luba mikrofon."); }
         }
 
-        // Fikseeri nupp lisab nüüd märkme📍
         function fixNow(isManual = false) {
             if (speechBuffer.length === 0) return;
             let noteText = document.getElementById('note-input').value;
-            
             if (isManual) {
-                const elapsed = formatTime(new Date() - sessionStart);
-                noteText += (noteText ? "\n" : "") + `[📍 Fikseeritud hetk: ${elapsed}]`;
+                const timestamp = formatTime(new Date() - sessionStart);
+                noteText += (noteText ? "\n" : "") + `📍 ${timestamp}`;
             }
-
-            const startT = sessionStart.toLocaleTimeString('et-EE'), endT = new Date().toLocaleTimeString('et-EE');
+            const sStart = sessionStart.toLocaleTimeString('et-EE'), sEnd = new Date().toLocaleTimeString('et-EE');
             const buf = [...speechBuffer];
-            const sM = speechMs, vM = silenceMs, hMi = hzMin, hMa = hzMax;
+            const stats = { sMs: speechMs, vMs: silenceMs, hMin: hzMin, hMax: hzMax };
             
             speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0; sessionStart = new Date();
             document.getElementById('note-input').value = "";
@@ -172,7 +172,7 @@
             reader.readAsDataURL(new Blob([wavBuffer], { type: 'audio/wav' }));
             reader.onloadend = () => {
                 const tx = db.transaction("sessions", "readwrite");
-                tx.objectStore("sessions").add({ id: Date.now(), start: startT, end: endT, note: noteText, audio: reader.result, stats: { sMs: sM, vMs: vM, hMin: hMi, hMax: hMa } });
+                tx.objectStore("sessions").add({ id: Date.now(), start: sStart, end: sEnd, note: noteText, audio: reader.result, stats: stats });
                 tx.oncomplete = renderHistory;
             };
         }
@@ -196,7 +196,7 @@
                         </div>
                         <audio src="${s.audio}" controls></audio>
                         <div class="mt-4 flex justify-between items-center">
-                            ${s.note ? `<details class="flex-grow"><summary class="text-slate-500 cursor-pointer text-[10px] uppercase font-bold tracking-widest">Märkmed</summary><div class="text-slate-400 italic mt-2 text-[11px] leading-relaxed border-t border-white/5 pt-2 font-[100]">${s.note}</div></details>` : '<div></div>'}
+                            ${s.note ? `<details class="flex-grow"><summary class="text-slate-500 cursor-pointer text-[10px] uppercase font-bold tracking-widest">Märkmed</summary><div class="text-slate-400 italic mt-2 text-[11px] leading-relaxed border-t border-white/5 pt-2 font-[100]">${s.note.replace(/\n/g, '<br>')}</div></details>` : '<div></div>'}
                             <button onclick="downloadHTML(${s.id})" class="text-amber-500/80 text-[10px] uppercase font-black tracking-widest border-b border-amber-500/20 pb-0.5 ml-4">HTML</button>
                         </div>
                     </div>`).join('');
