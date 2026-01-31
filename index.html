@@ -15,7 +15,12 @@
         :root { --bg: #020617; --glass: rgba(15, 23, 42, 0.6); --accent: #1d4ed8; --text-main: #f4ead5; }
         html, body { background-color: var(--bg); color: #e2e8f0; font-family: 'Inter', sans-serif; margin: 0; height: 100dvh; width: 100%; overflow: hidden; position: fixed; overscroll-behavior: none; }
         #main-scroller { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom) 24px; }
-        .logo-text { font-size: 2.5rem; font-weight: 900; letter-spacing: -0.05em; text-transform: uppercase; font-style: italic; line-height: 0.8; }
+        
+        /* Logo: veidi väiksem ja kitsam font */
+        .logo-text { font-size: 2.1rem; font-weight: 300; letter-spacing: -0.05em; text-transform: uppercase; font-style: italic; line-height: 0.8; }
+        /* Kell: veidi väiksem ja kitsam font */
+        #clock { font-size: 1.2rem; font-weight: 200; color: rgba(245, 158, 11, 0.5); font-family: 'Inter', sans-serif; }
+
         .glass-card { background: var(--glass); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); }
         .hidden { display: none !important; }
         #blackout-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; }
@@ -24,7 +29,6 @@
         #status-light { width: 10px; height: 10px; border-radius: 50%; background: #1e293b; transition: 0.2s; }
         .light-on { background: #10b981 !important; box-shadow: 0 0 15px #10b981; }
         audio { height: 35px; width: 100%; filter: invert(0.9) hue-rotate(180deg); margin-top: 10px; opacity: 0.8; }
-        .marker-chip { background: rgba(245, 158, 11, 0.15); color: #f59e0b; padding: 2px 8px; border-radius: 6px; font-weight: 800; font-size: 10px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid rgba(245, 158, 11, 0.2); }
     </style>
 </head>
 <body onload="init()">
@@ -33,7 +37,7 @@
         <div class="w-full max-w-md mx-auto">
             <header class="flex justify-between items-end mb-10 pt-6">
                 <h1 class="logo-text text-blue-600">Peegel</h1>
-                <div id="clock" class="text-2xl font-[100] text-amber-500/60 font-mono tracking-tighter text-right">00:00:00</div>
+                <div id="clock" class="tracking-tighter text-right">00:00:00</div>
             </header>
             
             <div id="setup-screen" class="py-10">
@@ -99,10 +103,7 @@
         async function startSession() {
             try {
                 await requestWakeLock();
-                // AUDIO PARANDUS: Lisatud echoCancellation ja müra pärssimine tagasi, aga autoGainControl välja
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false } 
-                });
+                stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false } });
                 audioCtx = new AudioContext({ sampleRate: 44100 });
                 const source = audioCtx.createMediaStreamSource(stream);
                 processor = audioCtx.createScriptProcessor(4096, 1, 1);
@@ -149,10 +150,8 @@
         function fixNow(isManual = false) {
             if (speechBuffer.length === 0) return;
             let noteText = document.getElementById('note-input').value;
-            let marker = null;
-            if (isManual) {
-                marker = formatTime(new Date() - sessionStart);
-            }
+            let hasMarker = isManual;
+            
             const sStart = sessionStart.toLocaleTimeString('et-EE'), sEnd = new Date().toLocaleTimeString('et-EE');
             const buf = [...speechBuffer];
             const stats = { sMs: speechMs, vMs: silenceMs, hMin: hzMin, hMax: hzMax };
@@ -172,7 +171,7 @@
             reader.readAsDataURL(new Blob([wavBuffer], { type: 'audio/wav' }));
             reader.onloadend = () => {
                 const tx = db.transaction("sessions", "readwrite");
-                tx.objectStore("sessions").add({ id: Date.now(), start: sStart, end: sEnd, note: noteText, marker: marker, audio: reader.result, stats: stats });
+                tx.objectStore("sessions").add({ id: Date.now(), start: sStart, end: sEnd, note: noteText, marker: hasMarker, audio: reader.result, stats: stats });
                 tx.oncomplete = renderHistory;
             };
         }
@@ -185,8 +184,8 @@
                     <div class="glass-card rounded-[32px] p-5 text-xs shadow-xl border-l-2 border-blue-500/30">
                         <div class="flex justify-between items-center mb-4">
                             <div class="text-emerald-400 font-[100] text-[14px]">${s.start} - ${s.end}</div>
-                            <div class="flex gap-2 items-center">
-                                ${s.marker ? `<div class="marker-chip">📍 ${s.marker}</div>` : ''}
+                            <div class="flex gap-3 items-center">
+                                ${s.marker ? `<span style="font-size: 16px;">📍</span>` : ''}
                                 <button onclick="delS(${s.id})" class="text-[9px] text-red-400/50 uppercase font-light">Kustuta</button>
                             </div>
                         </div>
@@ -210,7 +209,7 @@
         window.delS = id => { if(confirm("Kustuta?")) { db.transaction("sessions", "readwrite").objectStore("sessions").delete(id).onsuccess = renderHistory; } };
         window.downloadHTML = id => {
             db.transaction("sessions", "readonly").objectStore("sessions").get(id).onsuccess = (e) => {
-                const s = e.target.result; const h = `<html><body style="background:#020617;color:#eee;padding:40px;font-family:sans-serif;"><h1>${s.start}-${s.end}</h1>${s.marker ? `<h3>📍 Hetk: ${s.marker}</h3>` : ''}<audio controls src="${s.audio}"></audio><p>${s.note.replace(/\n/g, '<br>') || ""}</p></body></html>`;
+                const s = e.target.result; const h = `<html><body style="background:#020617;color:#eee;padding:40px;font-family:sans-serif;"><h1>${s.start}-${s.end}</h1>${s.marker ? `<h2>📍</h2>` : ''}<audio controls src="${s.audio}"></audio><p>${s.note ? s.note.replace(/\n/g, '<br>') : ""}</p></body></html>`;
                 const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([h], {type: 'text/html'})); a.download = `Sessioon_${s.id}.html`; a.click();
             };
         }
