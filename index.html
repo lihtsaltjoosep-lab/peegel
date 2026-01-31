@@ -98,7 +98,11 @@
         async function startSession() {
             try {
                 await requestWakeLock();
-                // TAASTATUD: echoCancellation on mobiilis kohustuslik, et Chrome mikri avaks
+                // Lisatud: Sund-uuendus seadmete nimekirjale
+                if (navigator.mediaDevices.ondevicechange !== undefined) {
+                    navigator.mediaDevices.ondevicechange = () => { console.log("Seadmed muutusid"); };
+                }
+
                 stream = await navigator.mediaDevices.getUserMedia({ 
                     audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false } 
                 });
