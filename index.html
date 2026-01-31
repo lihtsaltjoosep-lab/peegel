@@ -72,7 +72,7 @@
                             <span class="text-red-600 font-bold">HZ</span> <span id="hz-min" class="text-orange-500 font-bold">-</span>/<span id="hz-max" class="text-orange-500 font-bold">-</span>
                         </div>
                     </div>
-                    <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 resize-none font-[200] leading-relaxed" placeholder="Märkmed..."></textarea>
+                    <textarea id="note-input" class="w-full bg-transparent text-sm focus:outline-none h-24 text-slate-200 resize-none font-[200] leading-relaxed" placeholder="Kirjuta siia..."></textarea>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <button onclick="fixNow()" class="bg-blue-600 text-white py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest active:scale-95 shadow-lg">Fikseeri</button>
@@ -85,7 +85,6 @@
 
     <script>
         function init() {
-            // Teeme service workeri ka otse siin koodis, et mitte jaurata sw.js failiga
             if ('serviceWorker' in navigator) {
                 const swCode = "self.addEventListener('fetch', (e) => e.respondWith(fetch(e.request)));";
                 const blob = new Blob([swCode], {type: 'text/javascript'});
@@ -172,16 +171,15 @@
                             <button onclick="delS(${s.id})" class="text-[9px] text-red-400/50 uppercase font-light">Kustuta</button>
                         </div>
                         <div class="flex justify-between items-center mb-4 font-mono text-[10px] uppercase font-[100] tracking-tight text-slate-400">
-                            <div class="space-x-4">
-                                <span>Kõne: <span class="text-green-400 font-bold">${formatTime(s.stats.sMs)}</span></span>
-                                <span>Paus: <span class="text-blue-400 font-bold">${formatTime(s.stats.vMs)}</span></span>
+                            <div class="flex gap-4">
+                                <div>Kõne: <span class="text-green-400 font-bold">${formatTime(s.stats.sMs)}</span></div>
+                                <div>Paus: <span class="text-blue-500 font-bold">${formatTime(s.stats.vMs)}</span></div>
                             </div>
                             <div class="text-red-500/50">HZ <span class="text-orange-500 font-bold">${s.stats.hMin}-${s.stats.hMax}</span></div>
                         </div>
                         <audio src="${s.audio}" controls></audio>
-                        <div class="mt-4 flex justify-between items-center">
-                            ${s.note ? `<details class="flex-grow"><summary class="text-slate-500 cursor-pointer text-[10px] uppercase font-bold tracking-widest">Märkmed</summary><div class="text-slate-400 italic mt-2 text-[11px] leading-relaxed border-t border-white/5 pt-2 font-[100]">${s.note}</div></details>` : '<div></div>'}
-                            <button onclick="downloadHTML(${s.id})" class="text-amber-500/80 text-[10px] uppercase font-black tracking-widest border-b border-amber-500/20 pb-0.5 ml-4">HTML</button>
+                        <div class="mt-4">
+                            ${s.note ? `<details class="flex-grow"><summary class="text-slate-500 cursor-pointer text-[10px] uppercase font-bold tracking-widest">Märkmed</summary><div class="text-slate-400 italic mt-2 text-[11px] leading-relaxed border-t border-white/5 pt-2 font-[100]">${s.note}</div></details>` : ''}
                         </div>
                     </div>`).join('');
             };
@@ -189,12 +187,6 @@
         function formatTime(ms) { const s = Math.round(ms / 1000); return `${Math.floor(s/60)}m ${s%60}s`; }
         function stopSession() { isLive = false; setTimeout(() => location.reload(), 500); }
         window.delS = id => { if(confirm("Kustuta?")) { db.transaction("sessions", "readwrite").objectStore("sessions").delete(id).onsuccess = renderHistory; } };
-        window.downloadHTML = id => {
-            db.transaction("sessions", "readonly").objectStore("sessions").get(id).onsuccess = (e) => {
-                const s = e.target.result; const h = `<html><body style="background:#020617;color:#eee;padding:40px;font-family:sans-serif;"><h1>${s.start}-${s.end}</h1><audio controls src="${s.audio}"></audio><p>${s.note || ""}</p></body></html>`;
-                const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([h], {type: 'text/html'})); a.download = `Sessioon_${s.id}.html`; a.click();
-            };
-        }
     </script>
 </body>
 </html>
