@@ -62,7 +62,7 @@
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <button onclick="fixNow(true)" class="bg-blue-600 text-white py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest active:scale-95 shadow-lg">Fikseeri</button>
-                    <button id="stop-btn" onclick="stopSession()" class="bg-red-900/20 text-red-500 py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest border border-red-900/20 active:scale-95">Lõpeta</button>
+                    <button onclick="stopSession()" class="bg-red-900/20 text-red-500 py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest border border-red-900/20 active:scale-95">Lõpeta</button>
                 </div>
             </div>
             <div id="history-container" class="mt-8 space-y-4"></div>
@@ -77,7 +77,6 @@
         
         const THRESHOLD = 0.005;
         const POST_ROLL_MS = 400;
-        const AUTO_FIX_MS = 600000;
 
         function init() {
             if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(() => {}); }
@@ -99,10 +98,16 @@
         async function startSession() {
             try {
                 await requestWakeLock();
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
-                stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-                if (audioCtx.state === 'suspended') { await audioCtx.resume(); }
+                // Lisatud: Sund-uuendus seadmete nimekirjale
+                if (navigator.mediaDevices.ondevicechange !== undefined) {
+                    navigator.mediaDevices.ondevicechange = () => { console.log("Seadmed muutusid"); };
+                }
 
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false } 
+                });
+                
+                audioCtx = new AudioContext({ sampleRate: 44100 });
                 const source = audioCtx.createMediaStreamSource(stream);
                 processor = audioCtx.createScriptProcessor(4096, 1, 1);
                 const analyser = audioCtx.createAnalyser(); analyser.fftSize = 512;
@@ -115,8 +120,6 @@
 
                 processor.onaudioprocess = (e) => {
                     if (!isLive) return;
-                    if (speechMs >= AUTO_FIX_MS) { fixNow(false); return; }
-
                     const input = e.inputBuffer.getChannelData(0);
                     const chunk = new Float32Array(input);
                     analyser.getByteFrequencyData(dataArray);
@@ -136,48 +139,33 @@
                     document.getElementById('speech-timer').innerText = formatTime(speechMs);
                     document.getElementById('silence-timer').innerText = formatTime(silenceMs);
                 };
-                
                 document.getElementById('setup-screen').classList.add('hidden');
                 document.getElementById('active-session').classList.remove('hidden');
-            } catch (err) { alert("Viga mikrofoni avamisel."); }
+            } catch (err) { alert("Luba mikrofon."); }
         }
 
-        // Tagastame Promise, et saaksime oodata salvestuse lõpuni
         function fixNow(isManual = false) {
-            return new Promise((resolve) => {
-                if (speechBuffer.length === 0) {
-                    if (!isManual) { sessionStart = new Date(); speechMs = 0; silenceMs = 0; }
-                    resolve();
-                    return;
-                }
-                
-                let noteText = document.getElementById('note-input').value;
-                let hasMarker = isManual;
-                const sStart = sessionStart.toLocaleTimeString('et-EE'), sEnd = new Date().toLocaleTimeString('et-EE');
-                const buf = [...speechBuffer];
-                const stats = { sMs: speechMs, vMs: silenceMs, hMin: hzMin, hMax: hzMax };
-                
-                speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0; sessionStart = new Date();
-                document.getElementById('note-input').value = "";
-                
-                const length = buf.reduce((a, c) => a + c.length, 0);
-                const wavBuffer = new ArrayBuffer(44 + length * 2);
-                const view = new DataView(wavBuffer);
-                const writeS = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
-                writeS(0, 'RIFF'); view.setUint32(4, 32 + length * 2, true); writeS(8, 'WAVE'); writeS(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, 44100, true); view.setUint32(28, 88200, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeS(36, 'data'); view.setUint32(40, length * 2, true);
-                let offset = 44; for (let chunk of buf) { for (let i = 0; i < chunk.length; i++) { const s = Math.max(-1, Math.min(1, chunk[i])); view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true); offset += 2; } }
-                
-                const reader = new FileReader();
-                reader.readAsDataURL(new Blob([wavBuffer], { type: 'audio/wav' }));
-                reader.onloadend = () => {
-                    const tx = db.transaction("sessions", "readwrite");
-                    tx.objectStore("sessions").add({ id: Date.now(), start: sStart, end: sEnd, note: noteText, marker: hasMarker, audio: reader.result, stats: stats });
-                    tx.oncomplete = () => {
-                        renderHistory();
-                        resolve();
-                    };
-                };
-            });
+            if (speechBuffer.length === 0) return;
+            let noteText = document.getElementById('note-input').value;
+            let hasMarker = isManual;
+            const sStart = sessionStart.toLocaleTimeString('et-EE'), sEnd = new Date().toLocaleTimeString('et-EE');
+            const buf = [...speechBuffer];
+            const stats = { sMs: speechMs, vMs: silenceMs, hMin: hzMin, hMax: hzMax };
+            speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0; sessionStart = new Date();
+            document.getElementById('note-input').value = "";
+            const length = buf.reduce((a, c) => a + c.length, 0);
+            const wavBuffer = new ArrayBuffer(44 + length * 2);
+            const view = new DataView(wavBuffer);
+            const writeS = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+            writeS(0, 'RIFF'); view.setUint32(4, 32 + length * 2, true); writeS(8, 'WAVE'); writeS(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, 44100, true); view.setUint32(28, 88200, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeS(36, 'data'); view.setUint32(40, length * 2, true);
+            let offset = 44; for (let chunk of buf) { for (let i = 0; i < chunk.length; i++) { const s = Math.max(-1, Math.min(1, chunk[i])); view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true); offset += 2; } }
+            const reader = new FileReader();
+            reader.readAsDataURL(new Blob([wavBuffer], { type: 'audio/wav' }));
+            reader.onloadend = () => {
+                const tx = db.transaction("sessions", "readwrite");
+                tx.objectStore("sessions").add({ id: Date.now(), start: sStart, end: sEnd, note: noteText, marker: hasMarker, audio: reader.result, stats: stats });
+                tx.oncomplete = renderHistory;
+            };
         }
 
         function renderHistory() {
@@ -208,25 +196,8 @@
                     </div>`).join('');
             };
         }
-
         function formatTime(ms) { const s = Math.round(ms / 1000); return `${Math.floor(s/60)}m ${s%60}s`; }
-
-        async function stopSession() { 
-            const btn = document.getElementById('stop-btn');
-            btn.innerText = "Salvestan...";
-            btn.disabled = true;
-
-            isLive = false; 
-            
-            // Ootame, kuni viimane jupp on kindlalt salvestatud
-            if (speechBuffer.length > 0) {
-                await fixNow(false); 
-            }
-            
-            if (wakeLock) await wakeLock.release(); 
-            location.reload(); 
-        }
-
+        function stopSession() { isLive = false; if (wakeLock) wakeLock.release(); setTimeout(() => location.reload(), 500); }
         window.delS = id => { if(confirm("Kustuta?")) { db.transaction("sessions", "readwrite").objectStore("sessions").delete(id).onsuccess = renderHistory; } };
         window.downloadHTML = id => {
             db.transaction("sessions", "readonly").objectStore("sessions").get(id).onsuccess = (e) => {
