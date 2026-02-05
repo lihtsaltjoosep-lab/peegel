@@ -6,29 +6,23 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#000000">
+    <meta name="theme-color" content="#020617">
     <link rel="manifest" href="app.webmanifest">
     <title>Peegel</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;900&display=swap');
         :root { --bg: #020617; --glass: rgba(15, 23, 42, 0.6); --accent: #1d4ed8; --text-main: #f4ead5; }
-        html, body { background-color: #000000; color: #e2e8f0; font-family: 'Inter', sans-serif; margin: 0; height: 100dvh; width: 100%; overflow: hidden; position: fixed; overscroll-behavior: none; }
-        #main-scroller { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom) 24px; background-color: var(--bg); }
+        html, body { background-color: var(--bg); color: #e2e8f0; font-family: 'Inter', sans-serif; margin: 0; height: 100dvh; width: 100%; overflow: hidden; position: fixed; overscroll-behavior: none; }
+        #main-scroller { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom) 24px; }
+        
         .logo-text { font-size: 1.8rem; font-weight: 200; letter-spacing: -0.02em; text-transform: uppercase; font-style: italic; opacity: 0.9; }
         #clock { font-size: 1.1rem; font-weight: 100; color: rgba(245, 158, 11, 0.4); }
+
         .glass-card { background: var(--glass); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); }
         .hidden { display: none !important; }
-        
-        #blackout-overlay { 
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
-            background: #000000; z-index: 9999; display: none; cursor: none;
-        }
-        .unlock-trigger { 
-            position: absolute; bottom: 0; left: 0; width: 100px; height: 100px; 
-            z-index: 10000; background: rgba(255,255,255,0.01);
-        }
-
+        #blackout-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; }
+        .unlock-trigger { position: absolute; bottom: 0; left: 0; width: 150px; height: 150px; z-index: 10000; }
         .play-ring { width: 140px; height: 140px; border-radius: 50%; background: var(--accent); border: 2px solid var(--text-main); display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 40px auto; }
         #status-light { width: 10px; height: 10px; border-radius: 50%; background: #1e293b; transition: 0.2s; }
         .light-on { background: #10b981 !important; box-shadow: 0 0 15px #10b981; }
@@ -37,7 +31,6 @@
 </head>
 <body onload="init()">
     <div id="blackout-overlay"><div onclick="requestUnlock()" class="unlock-trigger"></div></div>
-    
     <div id="main-scroller">
         <div class="w-full max-w-md mx-auto">
             <header class="flex justify-between items-center mb-10 pt-6">
@@ -71,7 +64,7 @@
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <button onclick="fixNow(true)" class="bg-blue-600 text-white py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest active:scale-95 shadow-lg">Fikseeri</button>
-                    <button id="stop-btn" onclick="stopSession()" class="bg-red-900/20 text-red-500 py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest border border-red-900/20 active:scale-95">Lõpeta</button>
+                    <button onclick="stopSession()" class="bg-red-900/20 text-red-500 py-5 rounded-[28px] font-black uppercase text-[11px] tracking-widest border border-red-900/20 active:scale-95">Lõpeta</button>
                 </div>
             </div>
             <div id="history-container" class="mt-8 space-y-4"></div>
@@ -80,13 +73,13 @@
 
     <script>
         let wakeLock = null, db, audioCtx, processor, stream;
-        let speechBuffer = [], isLive = false;
+        let speechBuffer = [], preBuffer = [], isLive = false;
         let sessionStart = null, speechMs = 0, silenceMs = 0;
         let hzMin = 9999, hzMax = 0, isSpeaking = false, silenceHoldFrames = 0;
         
-        const THRESHOLD = 0.003;
+        const THRESHOLD = 0.003; // Suurendatud tundlikkus
+        const PRE_ROLL_MS = 400; 
         const POST_ROLL_MS = 600;
-        const AUTO_FIX_MS = 600000;
 
         function init() {
             if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(() => {}); }
@@ -99,7 +92,7 @@
         }
 
         function toggleBlackout(show) { document.getElementById('blackout-overlay').style.display = show ? 'block' : 'none'; }
-        function requestUnlock() { const pin = prompt("Kood:"); if (pin === "5") toggleBlackout(false); }
+        function requestUnlock() { if (prompt("Kood:") === "5") toggleBlackout(false); }
 
         const dbReq = indexedDB.open("Peegel_Database", 1);
         dbReq.onupgradeneeded = e => { db = e.target.result; if (!db.objectStoreNames.contains("sessions")) db.createObjectStore("sessions", { keyPath: "id" }); };
@@ -108,67 +101,87 @@
         async function startSession() {
             try {
                 await requestWakeLock();
-                stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
-                audioCtx = new AudioContext({ sampleRate: 44100 });
+                stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false, sampleRate: 44100 } });
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
                 const source = audioCtx.createMediaStreamSource(stream);
+                // Kasutame suuremat puhvrit (8192) mobiili stabiilsuse jaoks
                 processor = audioCtx.createScriptProcessor(8192, 1, 1);
-                const analyser = audioCtx.createAnalyser(); analyser.fftSize = 512;
+                const analyser = audioCtx.createAnalyser(); analyser.fftSize = 1024;
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
                 source.connect(analyser); analyser.connect(processor); processor.connect(audioCtx.destination);
-                sessionStart = new Date(); speechMs = 0; silenceMs = 0; speechBuffer = [];
+                
+                sessionStart = new Date(); speechMs = 0; silenceMs = 0; speechBuffer = []; preBuffer = [];
                 isLive = true;
                 const frameDuration = (8192 / 44100) * 1000;
+                const preBufferLimit = Math.ceil(PRE_ROLL_MS / frameDuration);
 
                 processor.onaudioprocess = (e) => {
                     if (!isLive) return;
-                    if (speechMs >= AUTO_FIX_MS) { fixNow(false); return; }
                     const input = e.inputBuffer.getChannelData(0);
+                    const chunk = new Float32Array(input);
                     analyser.getByteFrequencyData(dataArray);
-                    let mv = -1, mi = -1; for (let i = 0; i < dataArray.length; i++) { if (dataArray[i] > mv) { mv = dataArray[i]; mi = i; } }
+                    
+                    let mv = -1, mi = -1; 
+                    for (let i = 0; i < dataArray.length; i++) { if (dataArray[i] > mv) { mv = dataArray[i]; mi = i; } }
                     const hz = Math.round(mi * (audioCtx.sampleRate/2) / dataArray.length);
                     const rms = Math.sqrt(input.reduce((a, b) => a + b*b, 0)/input.length);
+
+                    preBuffer.push(chunk);
+                    if (preBuffer.length > preBufferLimit) preBuffer.shift();
+
                     if (rms > THRESHOLD) {
-                        isSpeaking = true; silenceHoldFrames = Math.round(POST_ROLL_MS / frameDuration); speechMs += frameDuration;
+                        if (!isSpeaking) { speechBuffer.push(...preBuffer); preBuffer = []; }
+                        isSpeaking = true; 
+                        silenceHoldFrames = Math.round(POST_ROLL_MS / frameDuration); 
+                        speechMs += frameDuration;
                         document.getElementById('status-light').classList.add('light-on');
                         if(hz > 50) { if(hz < hzMin) hzMin = hz; if(hz > hzMax) hzMax = hz; document.getElementById('hz-min').innerText = hzMin; document.getElementById('hz-max').innerText = hzMax; }
                     } else {
                         if (silenceHoldFrames > 0) { silenceHoldFrames--; speechMs += frameDuration; } 
                         else { isSpeaking = false; silenceMs += frameDuration; document.getElementById('status-light').classList.remove('light-on'); }
                     }
-                    if (isSpeaking || silenceHoldFrames > 0) { speechBuffer.push(new Float32Array(input)); }
+                    if (isSpeaking || silenceHoldFrames > 0) { speechBuffer.push(chunk); }
+                    
                     document.getElementById('speech-timer').innerText = formatTime(speechMs);
                     document.getElementById('silence-timer').innerText = formatTime(silenceMs);
                 };
                 document.getElementById('setup-screen').classList.add('hidden');
                 document.getElementById('active-session').classList.remove('hidden');
-            } catch (err) { alert("Viga!"); }
+            } catch (err) { alert("Luba mikrofon."); }
         }
 
         function fixNow(isManual = false) {
-            return new Promise((resolve) => {
-                if (speechBuffer.length === 0) { resolve(); return; }
-                const noteText = document.getElementById('note-input').value;
-                const hasMarker = isManual;
-                const sStart = sessionStart.toLocaleTimeString('et-EE'), sEnd = new Date().toLocaleTimeString('et-EE');
-                const buf = [...speechBuffer];
-                const stats = { sMs: speechMs, vMs: silenceMs, hMin: hzMin, hMax: hzMax };
-                speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0; sessionStart = new Date();
-                document.getElementById('note-input').value = "";
-                const length = buf.reduce((a, c) => a + c.length, 0);
-                const wavBuffer = new ArrayBuffer(44 + length * 2);
-                const view = new DataView(wavBuffer);
-                const writeS = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
-                writeS(0, 'RIFF'); view.setUint32(4, 36 + length * 2, true); writeS(8, 'WAVE'); writeS(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, 44100, true); view.setUint32(28, 44100 * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeS(36, 'data'); view.setUint32(40, length * 2, true);
-                let offset = 44;
-                for (let chunk of buf) { for (let i = 0; i < chunk.length; i++) { let s = Math.max(-1, Math.min(1, chunk[i])); view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true); offset += 2; } }
-                const reader = new FileReader();
-                reader.readAsDataURL(new Blob([wavBuffer], { type: 'audio/wav' }));
-                reader.onloadend = () => {
-                    const tx = db.transaction("sessions", "readwrite");
-                    tx.objectStore("sessions").add({ id: Date.now(), start: sStart, end: sEnd, note: noteText, marker: hasMarker, audio: reader.result, stats: stats });
-                    tx.oncomplete = () => { renderHistory(); resolve(); };
-                };
-            });
+            if (speechBuffer.length === 0) return;
+            let noteText = document.getElementById('note-input').value;
+            let hasMarker = isManual;
+            const sStart = sessionStart.toLocaleTimeString('et-EE'), sEnd = new Date().toLocaleTimeString('et-EE');
+            const buf = [...speechBuffer];
+            const stats = { sMs: speechMs, vMs: silenceMs, hMin: hzMin, hMax: hzMax };
+            
+            speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0; sessionStart = new Date();
+            document.getElementById('note-input').value = "";
+            
+            const length = buf.reduce((a, c) => a + c.length, 0);
+            const wavBuffer = new ArrayBuffer(44 + length * 2);
+            const view = new DataView(wavBuffer);
+            const writeS = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+            
+            // Standardne WAV päis
+            writeS(0, 'RIFF'); view.setUint32(4, 36 + length * 2, true); writeS(8, 'WAVE'); writeS(12, 'fmt '); 
+            view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); 
+            view.setUint32(24, 44100, true); view.setUint32(28, 88200, true); 
+            view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeS(36, 'data'); view.setUint32(40, length * 2, true);
+            
+            let offset = 44;
+            for (let chunk of buf) { for (let i = 0; i < chunk.length; i++) { const s = Math.max(-1, Math.min(1, chunk[i])); view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true); offset += 2; } }
+            
+            const reader = new FileReader();
+            reader.readAsDataURL(new Blob([wavBuffer], { type: 'audio/wav' }));
+            reader.onloadend = () => {
+                const tx = db.transaction("sessions", "readwrite");
+                tx.objectStore("sessions").add({ id: Date.now(), start: sStart, end: sEnd, note: noteText, marker: hasMarker, audio: reader.result, stats: stats });
+                tx.oncomplete = renderHistory;
+            };
         }
 
         function renderHistory() {
@@ -194,30 +207,18 @@
                         <audio src="${s.audio}" controls></audio>
                         <div class="mt-4 flex justify-between items-center">
                             ${s.note ? `<details class="flex-grow"><summary class="text-slate-500 cursor-pointer text-[10px] uppercase font-bold tracking-widest">Märkmed</summary><div class="text-slate-400 italic mt-2 text-[11px] leading-relaxed border-t border-white/5 pt-2 font-[100]">${s.note.replace(/\n/g, '<br>')}</div></details>` : '<div></div>'}
-                            <button onclick="downloadWav(${s.id})" class="text-amber-500/80 text-[10px] uppercase font-black tracking-widest border-b border-amber-500/20 pb-0.5 ml-4">Salvesta failina</button>
+                            <button onclick="downloadHTML(${s.id})" class="text-amber-500/80 text-[10px] uppercase font-black tracking-widest border-b border-amber-500/20 pb-0.5 ml-4">HTML</button>
                         </div>
                     </div>`).join('');
             };
         }
-
         function formatTime(ms) { const s = Math.round(ms / 1000); return `${Math.floor(s/60)}m ${s%60}s`; }
-
-        async function stopSession() { 
-            const btn = document.getElementById('stop-btn'); btn.innerText = "Salvestan..."; btn.disabled = true;
-            isLive = false; 
-            if (speechBuffer.length > 0) { await fixNow(false); }
-            if (wakeLock) await wakeLock.release(); 
-            location.reload(); 
-        }
-
+        function stopSession() { isLive = false; if (wakeLock) wakeLock.release(); setTimeout(() => location.reload(), 500); }
         window.delS = id => { if(confirm("Kustuta?")) { db.transaction("sessions", "readwrite").objectStore("sessions").delete(id).onsuccess = renderHistory; } };
-        window.downloadWav = id => {
+        window.downloadHTML = id => {
             db.transaction("sessions", "readonly").objectStore("sessions").get(id).onsuccess = (e) => {
-                const s = e.target.result;
-                const link = document.createElement('a');
-                link.href = s.audio;
-                link.download = `Peegel_Sessioon_${s.start.replace(/:/g, '-')}.wav`;
-                link.click();
+                const s = e.target.result; const h = `<html><body style="background:#020617;color:#eee;padding:40px;font-family:sans-serif;"><h1>${s.start}-${s.end}</h1>${s.marker ? `<h2>📍</h2>` : ''}<audio controls src="${s.audio}"></audio><p>${s.note ? s.note.replace(/\n/g, '<br>') : ""}</p></body></html>`;
+                const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([h], {type: 'text/html'})); a.download = `Sessioon_${s.id}.html`; a.click();
             };
         }
     </script>
