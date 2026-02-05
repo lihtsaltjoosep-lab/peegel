@@ -6,21 +6,41 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#020617">
-    <link rel="manifest" href="app.webmanifest">
+    <meta name="theme-color" content="#000000"> <link rel="manifest" href="app.webmanifest">
     <title>Peegel</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;900&display=swap');
         :root { --bg: #020617; --glass: rgba(15, 23, 42, 0.6); --accent: #1d4ed8; --text-main: #f4ead5; }
-        html, body { background-color: var(--bg); color: #e2e8f0; font-family: 'Inter', sans-serif; margin: 0; height: 100dvh; width: 100%; overflow: hidden; position: fixed; overscroll-behavior: none; }
-        #main-scroller { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom) 24px; }
+        html, body { background-color: #000000; color: #e2e8f0; font-family: 'Inter', sans-serif; margin: 0; height: 100dvh; width: 100%; overflow: hidden; position: fixed; overscroll-behavior: none; }
+        #main-scroller { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom) 24px; background-color: var(--bg); }
         .logo-text { font-size: 1.8rem; font-weight: 200; letter-spacing: -0.02em; text-transform: uppercase; font-style: italic; opacity: 0.9; }
         #clock { font-size: 1.1rem; font-weight: 100; color: rgba(245, 158, 11, 0.4); }
         .glass-card { background: var(--glass); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); }
         .hidden { display: none !important; }
-        #blackout-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; display: none; }
-        .unlock-trigger { position: absolute; bottom: 0; left: 0; width: 150px; height: 150px; z-index: 10000; }
+        
+        /* ULTIMATE BLACKOUT */
+        #blackout-overlay { 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100vw; 
+            height: 100vh; 
+            background: #000000; /* Süsimust */
+            z-index: 9999; 
+            display: none; 
+            cursor: none;
+        }
+        .unlock-trigger { 
+            position: absolute; 
+            bottom: 0; 
+            left: 0; 
+            width: 100px; 
+            height: 100px; 
+            z-index: 10000; 
+            background: rgba(255,255,255,0.01); /* Peaaegu nähtamatu punkt avamiseks */
+        }
+
         .play-ring { width: 140px; height: 140px; border-radius: 50%; background: var(--accent); border: 2px solid var(--text-main); display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 40px auto; }
         #status-light { width: 10px; height: 10px; border-radius: 50%; background: #1e293b; transition: 0.2s; }
         .light-on { background: #10b981 !important; box-shadow: 0 0 15px #10b981; }
@@ -29,6 +49,7 @@
 </head>
 <body onload="init()">
     <div id="blackout-overlay"><div onclick="requestUnlock()" class="unlock-trigger"></div></div>
+    
     <div id="main-scroller">
         <div class="w-full max-w-md mx-auto">
             <header class="flex justify-between items-center mb-10 pt-6">
@@ -75,9 +96,8 @@
         let sessionStart = null, speechMs = 0, silenceMs = 0;
         let hzMin = 9999, hzMax = 0, isSpeaking = false, silenceHoldFrames = 0;
         
-        // HAKKIMISE VASTASED SEADED
-        const THRESHOLD = 0.003; // Tundlikum, et ei lõikaks sõnu
-        const POST_ROLL_MS = 600; // Pikem voolavus sõnade lõpus
+        const THRESHOLD = 0.003;
+        const POST_ROLL_MS = 600;
         const AUTO_FIX_MS = 600000;
 
         function init() {
@@ -90,8 +110,16 @@
             try { if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); } } catch (err) {}
         }
 
-        function toggleBlackout(show) { document.getElementById('blackout-overlay').style.display = show ? 'block' : 'none'; }
-        function requestUnlock() { if (prompt("Kood:") === "5") toggleBlackout(false); }
+        // TÄIUSTATUD PIMENDAMINE
+        function toggleBlackout(show) { 
+            const overlay = document.getElementById('blackout-overlay');
+            overlay.style.display = show ? 'block' : 'none';
+        }
+
+        function requestUnlock() { 
+            const pin = prompt("Kood:");
+            if (pin === "5") toggleBlackout(false); 
+        }
 
         const dbReq = indexedDB.open("Peegel_Database", 1);
         dbReq.onupgradeneeded = e => { db = e.target.result; if (!db.objectStoreNames.contains("sessions")) db.createObjectStore("sessions", { keyPath: "id" }); };
@@ -100,21 +128,13 @@
         async function startSession() {
             try {
                 await requestWakeLock();
-                // Toores ja aus heli, et telefon ei saaks filtritega "eksida"
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
-                });
-                
+                stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
                 audioCtx = new AudioContext({ sampleRate: 44100 });
                 const source = audioCtx.createMediaStreamSource(stream);
-                
-                // Suurem puhver (8192) stabiilsuse jaoks mobiilis
                 processor = audioCtx.createScriptProcessor(8192, 1, 1);
                 const analyser = audioCtx.createAnalyser(); analyser.fftSize = 512;
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
-                
                 source.connect(analyser); analyser.connect(processor); processor.connect(audioCtx.destination);
-                
                 sessionStart = new Date(); speechMs = 0; silenceMs = 0; speechBuffer = [];
                 isLive = true;
                 const frameDuration = (8192 / 44100) * 1000;
@@ -122,33 +142,23 @@
                 processor.onaudioprocess = (e) => {
                     if (!isLive) return;
                     if (speechMs >= AUTO_FIX_MS) { fixNow(false); return; }
-
                     const input = e.inputBuffer.getChannelData(0);
                     analyser.getByteFrequencyData(dataArray);
-                    
                     let mv = -1, mi = -1; for (let i = 0; i < dataArray.length; i++) { if (dataArray[i] > mv) { mv = dataArray[i]; mi = i; } }
                     const hz = Math.round(mi * (audioCtx.sampleRate/2) / dataArray.length);
                     const rms = Math.sqrt(input.reduce((a, b) => a + b*b, 0)/input.length);
-
                     if (rms > THRESHOLD) {
-                        isSpeaking = true; 
-                        silenceHoldFrames = Math.round(POST_ROLL_MS / frameDuration); 
-                        speechMs += frameDuration;
+                        isSpeaking = true; silenceHoldFrames = Math.round(POST_ROLL_MS / frameDuration); speechMs += frameDuration;
                         document.getElementById('status-light').classList.add('light-on');
                         if(hz > 50) { if(hz < hzMin) hzMin = hz; if(hz > hzMax) hzMax = hz; document.getElementById('hz-min').innerText = hzMin; document.getElementById('hz-max').innerText = hzMax; }
                     } else {
                         if (silenceHoldFrames > 0) { silenceHoldFrames--; speechMs += frameDuration; } 
                         else { isSpeaking = false; silenceMs += frameDuration; document.getElementById('status-light').classList.remove('light-on'); }
                     }
-                    
-                    if (isSpeaking || silenceHoldFrames > 0) {
-                        speechBuffer.push(new Float32Array(input));
-                    }
-                    
+                    if (isSpeaking || silenceHoldFrames > 0) { speechBuffer.push(new Float32Array(input)); }
                     document.getElementById('speech-timer').innerText = formatTime(speechMs);
                     document.getElementById('silence-timer').innerText = formatTime(silenceMs);
                 };
-                
                 document.getElementById('setup-screen').classList.add('hidden');
                 document.getElementById('active-session').classList.remove('hidden');
             } catch (err) { alert("Viga!"); }
@@ -157,45 +167,20 @@
         function fixNow(isManual = false) {
             return new Promise((resolve) => {
                 if (speechBuffer.length === 0) { resolve(); return; }
-                
                 const noteText = document.getElementById('note-input').value;
                 const hasMarker = isManual;
                 const sStart = sessionStart.toLocaleTimeString('et-EE'), sEnd = new Date().toLocaleTimeString('et-EE');
                 const buf = [...speechBuffer];
                 const stats = { sMs: speechMs, vMs: silenceMs, hMin: hzMin, hMax: hzMax };
-                
                 speechBuffer = []; speechMs = 0; silenceMs = 0; hzMin = 9999; hzMax = 0; sessionStart = new Date();
                 document.getElementById('note-input').value = "";
-                
                 const length = buf.reduce((a, c) => a + c.length, 0);
                 const wavBuffer = new ArrayBuffer(44 + length * 2);
                 const view = new DataView(wavBuffer);
-
-                // KORREKTNE WAV PÄIS (Header) arvutis avamiseks
                 const writeS = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
-                writeS(0, 'RIFF');
-                view.setUint32(4, 36 + length * 2, true);
-                writeS(8, 'WAVE');
-                writeS(12, 'fmt ');
-                view.setUint32(16, 16, true);
-                view.setUint16(20, 1, true);
-                view.setUint16(22, 1, true);
-                view.setUint32(24, 44100, true);
-                view.setUint32(28, 44100 * 2, true);
-                view.setUint16(32, 2, true);
-                view.setUint16(34, 16, true);
-                writeS(36, 'data');
-                view.setUint32(40, length * 2, true);
-
+                writeS(0, 'RIFF'); view.setUint32(4, 36 + length * 2, true); writeS(8, 'WAVE'); writeS(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, 44100, true); view.setUint32(28, 44100 * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeS(36, 'data'); view.setUint32(40, length * 2, true);
                 let offset = 44;
-                for (let chunk of buf) {
-                    for (let i = 0; i < chunk.length; i++) {
-                        let s = Math.max(-1, Math.min(1, chunk[i]));
-                        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-                        offset += 2;
-                    }
-                }
-                
+                for (let chunk of buf) { for (let i = 0; i < chunk.length; i++) { let s = Math.max(-1, Math.min(1, chunk[i])); view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true); offset += 2; } }
                 const reader = new FileReader();
                 reader.readAsDataURL(new Blob([wavBuffer], { type: 'audio/wav' }));
                 reader.onloadend = () => {
@@ -239,8 +224,6 @@
         }
 
         window.delS = id => { if(confirm("Kustuta?")) { db.transaction("sessions", "readwrite").objectStore("sessions").delete(id).onsuccess = renderHistory; } };
-        
-        // PARANDATUD FAILINA SALVESTAMINE
         window.downloadWav = id => {
             db.transaction("sessions", "readonly").objectStore("sessions").get(id).onsuccess = (e) => {
                 const s = e.target.result;
