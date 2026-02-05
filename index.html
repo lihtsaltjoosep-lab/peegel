@@ -6,7 +6,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#000000"> <link rel="manifest" href="app.webmanifest">
+    <meta name="theme-color" content="#000000">
+    <link rel="manifest" href="app.webmanifest">
     <title>Peegel</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -19,26 +20,13 @@
         .glass-card { background: var(--glass); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); }
         .hidden { display: none !important; }
         
-        /* ULTIMATE BLACKOUT */
         #blackout-overlay { 
-            position: fixed; 
-            top: 0; 
-            left: 0; 
-            width: 100vw; 
-            height: 100vh; 
-            background: #000000; /* Süsimust */
-            z-index: 9999; 
-            display: none; 
-            cursor: none;
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
+            background: #000000; z-index: 9999; display: none; cursor: none;
         }
         .unlock-trigger { 
-            position: absolute; 
-            bottom: 0; 
-            left: 0; 
-            width: 100px; 
-            height: 100px; 
-            z-index: 10000; 
-            background: rgba(255,255,255,0.01); /* Peaaegu nähtamatu punkt avamiseks */
+            position: absolute; bottom: 0; left: 0; width: 100px; height: 100px; 
+            z-index: 10000; background: rgba(255,255,255,0.01);
         }
 
         .play-ring { width: 140px; height: 140px; border-radius: 50%; background: var(--accent); border: 2px solid var(--text-main); display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 40px auto; }
@@ -110,16 +98,8 @@
             try { if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); } } catch (err) {}
         }
 
-        // TÄIUSTATUD PIMENDAMINE
-        function toggleBlackout(show) { 
-            const overlay = document.getElementById('blackout-overlay');
-            overlay.style.display = show ? 'block' : 'none';
-        }
-
-        function requestUnlock() { 
-            const pin = prompt("Kood:");
-            if (pin === "5") toggleBlackout(false); 
-        }
+        function toggleBlackout(show) { document.getElementById('blackout-overlay').style.display = show ? 'block' : 'none'; }
+        function requestUnlock() { const pin = prompt("Kood:"); if (pin === "5") toggleBlackout(false); }
 
         const dbReq = indexedDB.open("Peegel_Database", 1);
         dbReq.onupgradeneeded = e => { db = e.target.result; if (!db.objectStoreNames.contains("sessions")) db.createObjectStore("sessions", { keyPath: "id" }); };
@@ -203,6 +183,13 @@
                                 ${s.marker ? `<span style="font-size: 16px;">📍</span>` : ''}
                                 <button onclick="delS(${s.id})" class="text-[9px] text-red-400/50 uppercase font-light">Kustuta</button>
                             </div>
+                        </div>
+                        <div class="flex justify-between items-center mb-4 font-mono text-[10px] uppercase font-[100] tracking-tight text-slate-400">
+                            <div class="flex gap-4">
+                                <div>Kõne: <span class="text-green-400 font-bold">${formatTime(s.stats.sMs)}</span></div>
+                                <div>Paus: <span class="text-blue-500 font-bold">${formatTime(s.stats.vMs)}</span></div>
+                            </div>
+                            <div class="text-red-500/50">HZ <span class="text-orange-500 font-bold">${s.stats.hMin}-${s.stats.hMax}</span></div>
                         </div>
                         <audio src="${s.audio}" controls></audio>
                         <div class="mt-4 flex justify-between items-center">
