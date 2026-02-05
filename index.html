@@ -7,9 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#020617">
-    
     <link rel="manifest" href="app.webmanifest">
-
     <title>Peegel</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -77,27 +75,13 @@
         let sessionStart = null, speechMs = 0, silenceMs = 0;
         let hzMin = 9999, hzMax = 0, isSpeaking = false, silenceHoldFrames = 0;
         
-        const THRESHOLD = 0.005;
-        const POST_ROLL_MS = 400;
+        // HAKKIMISE VASTASED SEADED
+        const THRESHOLD = 0.003; // Tundlikum, et ei lõikaks sõnu
+        const POST_ROLL_MS = 600; // Pikem voolavus sõnade lõpus
         const AUTO_FIX_MS = 600000;
 
         function init() {
-            // Service Workeri registreerimine offline-režiimiks
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('sw.js')
-                .then(reg => {
-                    reg.onupdatefound = () => {
-                        const installingWorker = reg.installing;
-                        installingWorker.onstatechange = () => {
-                            if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                console.log('Uus versioon on saadaval, palun värskenda.');
-                            }
-                        };
-                    };
-                })
-                .catch(err => console.log('SW viga:', err));
-            }
-            
+            if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(() => {}); }
             setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('et-EE'); }, 1000);
             window.scrollTo(0, 1);
         }
@@ -116,58 +100,66 @@
         async function startSession() {
             try {
                 await requestWakeLock();
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
-                stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-                if (audioCtx.state === 'suspended') { await audioCtx.resume(); }
-
+                // Toores ja aus heli, et telefon ei saaks filtritega "eksida"
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
+                });
+                
+                audioCtx = new AudioContext({ sampleRate: 44100 });
                 const source = audioCtx.createMediaStreamSource(stream);
-                processor = audioCtx.createScriptProcessor(4096, 1, 1);
+                
+                // Suurem puhver (8192) stabiilsuse jaoks mobiilis
+                processor = audioCtx.createScriptProcessor(8192, 1, 1);
                 const analyser = audioCtx.createAnalyser(); analyser.fftSize = 512;
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                
                 source.connect(analyser); analyser.connect(processor); processor.connect(audioCtx.destination);
                 
                 sessionStart = new Date(); speechMs = 0; silenceMs = 0; speechBuffer = [];
                 isLive = true;
-                const frameDuration = (4096 / 44100) * 1000;
+                const frameDuration = (8192 / 44100) * 1000;
 
                 processor.onaudioprocess = (e) => {
                     if (!isLive) return;
                     if (speechMs >= AUTO_FIX_MS) { fixNow(false); return; }
 
                     const input = e.inputBuffer.getChannelData(0);
-                    const chunk = new Float32Array(input);
                     analyser.getByteFrequencyData(dataArray);
+                    
                     let mv = -1, mi = -1; for (let i = 0; i < dataArray.length; i++) { if (dataArray[i] > mv) { mv = dataArray[i]; mi = i; } }
                     const hz = Math.round(mi * (audioCtx.sampleRate/2) / dataArray.length);
                     const rms = Math.sqrt(input.reduce((a, b) => a + b*b, 0)/input.length);
 
                     if (rms > THRESHOLD) {
-                        isSpeaking = true; silenceHoldFrames = Math.round(POST_ROLL_MS / frameDuration); speechMs += frameDuration;
+                        isSpeaking = true; 
+                        silenceHoldFrames = Math.round(POST_ROLL_MS / frameDuration); 
+                        speechMs += frameDuration;
                         document.getElementById('status-light').classList.add('light-on');
                         if(hz > 50) { if(hz < hzMin) hzMin = hz; if(hz > hzMax) hzMax = hz; document.getElementById('hz-min').innerText = hzMin; document.getElementById('hz-max').innerText = hzMax; }
                     } else {
                         if (silenceHoldFrames > 0) { silenceHoldFrames--; speechMs += frameDuration; } 
                         else { isSpeaking = false; silenceMs += frameDuration; document.getElementById('status-light').classList.remove('light-on'); }
                     }
-                    if (isSpeaking || silenceHoldFrames > 0) { speechBuffer.push(chunk); }
+                    
+                    if (isSpeaking || silenceHoldFrames > 0) {
+                        speechBuffer.push(new Float32Array(input));
+                    }
+                    
                     document.getElementById('speech-timer').innerText = formatTime(speechMs);
                     document.getElementById('silence-timer').innerText = formatTime(silenceMs);
                 };
                 
                 document.getElementById('setup-screen').classList.add('hidden');
                 document.getElementById('active-session').classList.remove('hidden');
-            } catch (err) { alert("Viga mikrofoni avamisel."); }
+            } catch (err) { alert("Viga!"); }
         }
 
         function fixNow(isManual = false) {
             return new Promise((resolve) => {
-                if (speechBuffer.length === 0) {
-                    if (!isManual) { sessionStart = new Date(); speechMs = 0; silenceMs = 0; }
-                    resolve(); return;
-                }
+                if (speechBuffer.length === 0) { resolve(); return; }
                 
-                let noteText = document.getElementById('note-input').value;
-                let hasMarker = isManual;
+                const noteText = document.getElementById('note-input').value;
+                const hasMarker = isManual;
                 const sStart = sessionStart.toLocaleTimeString('et-EE'), sEnd = new Date().toLocaleTimeString('et-EE');
                 const buf = [...speechBuffer];
                 const stats = { sMs: speechMs, vMs: silenceMs, hMin: hzMin, hMax: hzMax };
@@ -178,9 +170,31 @@
                 const length = buf.reduce((a, c) => a + c.length, 0);
                 const wavBuffer = new ArrayBuffer(44 + length * 2);
                 const view = new DataView(wavBuffer);
+
+                // KORREKTNE WAV PÄIS (Header) arvutis avamiseks
                 const writeS = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
-                writeS(0, 'RIFF'); view.setUint32(4, 32 + length * 2, true); writeS(8, 'WAVE'); writeS(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, 44100, true); view.setUint32(28, 88200, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeS(36, 'data'); view.setUint32(40, length * 2, true);
-                let offset = 44; for (let chunk of buf) { for (let i = 0; i < chunk.length; i++) { const s = Math.max(-1, Math.min(1, chunk[i])); view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true); offset += 2; } }
+                writeS(0, 'RIFF');
+                view.setUint32(4, 36 + length * 2, true);
+                writeS(8, 'WAVE');
+                writeS(12, 'fmt ');
+                view.setUint32(16, 16, true);
+                view.setUint16(20, 1, true);
+                view.setUint16(22, 1, true);
+                view.setUint32(24, 44100, true);
+                view.setUint32(28, 44100 * 2, true);
+                view.setUint16(32, 2, true);
+                view.setUint16(34, 16, true);
+                writeS(36, 'data');
+                view.setUint32(40, length * 2, true);
+
+                let offset = 44;
+                for (let chunk of buf) {
+                    for (let i = 0; i < chunk.length; i++) {
+                        let s = Math.max(-1, Math.min(1, chunk[i]));
+                        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+                        offset += 2;
+                    }
+                }
                 
                 const reader = new FileReader();
                 reader.readAsDataURL(new Blob([wavBuffer], { type: 'audio/wav' }));
@@ -205,17 +219,10 @@
                                 <button onclick="delS(${s.id})" class="text-[9px] text-red-400/50 uppercase font-light">Kustuta</button>
                             </div>
                         </div>
-                        <div class="flex justify-between items-center mb-4 font-mono text-[10px] uppercase font-[100] tracking-tight text-slate-400">
-                            <div class="flex gap-4">
-                                <div>Kõne: <span class="text-green-400 font-bold">${formatTime(s.stats.sMs)}</span></div>
-                                <div>Paus: <span class="text-blue-500 font-bold">${formatTime(s.stats.vMs)}</span></div>
-                            </div>
-                            <div class="text-red-500/50">HZ <span class="text-orange-500 font-bold">${s.stats.hMin}-${s.stats.hMax}</span></div>
-                        </div>
                         <audio src="${s.audio}" controls></audio>
                         <div class="mt-4 flex justify-between items-center">
                             ${s.note ? `<details class="flex-grow"><summary class="text-slate-500 cursor-pointer text-[10px] uppercase font-bold tracking-widest">Märkmed</summary><div class="text-slate-400 italic mt-2 text-[11px] leading-relaxed border-t border-white/5 pt-2 font-[100]">${s.note.replace(/\n/g, '<br>')}</div></details>` : '<div></div>'}
-                            <button onclick="downloadHTML(${s.id})" class="text-amber-500/80 text-[10px] uppercase font-black tracking-widest border-b border-amber-500/20 pb-0.5 ml-4">HTML</button>
+                            <button onclick="downloadWav(${s.id})" class="text-amber-500/80 text-[10px] uppercase font-black tracking-widest border-b border-amber-500/20 pb-0.5 ml-4">Salvesta failina</button>
                         </div>
                     </div>`).join('');
             };
@@ -224,9 +231,7 @@
         function formatTime(ms) { const s = Math.round(ms / 1000); return `${Math.floor(s/60)}m ${s%60}s`; }
 
         async function stopSession() { 
-            const btn = document.getElementById('stop-btn');
-            btn.innerText = "Salvestan...";
-            btn.disabled = true;
+            const btn = document.getElementById('stop-btn'); btn.innerText = "Salvestan..."; btn.disabled = true;
             isLive = false; 
             if (speechBuffer.length > 0) { await fixNow(false); }
             if (wakeLock) await wakeLock.release(); 
@@ -234,10 +239,15 @@
         }
 
         window.delS = id => { if(confirm("Kustuta?")) { db.transaction("sessions", "readwrite").objectStore("sessions").delete(id).onsuccess = renderHistory; } };
-        window.downloadHTML = id => {
+        
+        // PARANDATUD FAILINA SALVESTAMINE
+        window.downloadWav = id => {
             db.transaction("sessions", "readonly").objectStore("sessions").get(id).onsuccess = (e) => {
-                const s = e.target.result; const h = `<html><body style="background:#020617;color:#eee;padding:40px;font-family:sans-serif;"><h1>${s.start}-${s.end}</h1>${s.marker ? `<h2>📍</h2>` : ''}<audio controls src="${s.audio}"></audio><p>${s.note ? s.note.replace(/\n/g, '<br>') : ""}</p></body></html>`;
-                const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([h], {type: 'text/html'})); a.download = `Sessioon_${s.id}.html`; a.click();
+                const s = e.target.result;
+                const link = document.createElement('a');
+                link.href = s.audio;
+                link.download = `Peegel_Sessioon_${s.start.replace(/:/g, '-')}.wav`;
+                link.click();
             };
         }
     </script>
